@@ -6,6 +6,9 @@ import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.HttpHeaderParser
 
+/**
+ * ZBByteArrayRequest
+ */
 internal class ZBByteArrayRequest(
     method: Int,
     url: String,

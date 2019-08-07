@@ -29,11 +29,11 @@ class MainActivity : AppCompatActivity() {
 
             //validate()
 
-            //getCredits()
+            getCredits()
 
             //getApiUsage()
 
-            sendFile()
+            //sendFile()
 
             //fileStatus("<YOUR_FILE_ID>")
 

@@ -1,6 +1,30 @@
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'com.jfrog.bintray'                       // Apply Bintray Plugin
+apply plugin: 'com.github.dcendents.android-maven'      // Apply Maven Plugin
+
+ext {
+
+    bintrayRepo = "ZeroBounceSDK"                       // The repository name in Bintray dashboard
+    bintrayName = "com.zerobounce.android"              // The package name of the Bintray repository
+    libraryName = "zero_bounce_sdk"                     // The module name in Android Studio project
+
+    publishedGroupId = "com.zerobounce.android"         // The ID you want to add in 'implementation' line
+    artifact = "zerobouncesdk"                          // The artifact you want to add in 'implementation' line
+    libraryVersion = "1.0.0"
+
+    libraryDescription = "The ZeroBounce SDK for Android"
+    siteUrl = "https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup"
+    gitUrl = "https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup.git"
+    developerId = "zerobounce"
+    developerName = "Zero Bounce"
+    developerEmail = "integrations@zerobounce.net"
+    licenseName = "The Apache Software License, Version 2.0"
+    licenseUrl = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+    allLicenses = ["Apache-2.0"]
+}
+
 
 android {
     compileSdkVersion 28
@@ -45,4 +69,13 @@ dependencies {
 }
 repositories {
     mavenCentral()
+}
+
+tasks.withType(Javadoc) {
+    options.addBooleanOption('Xdoclint:none', true)
+}
+
+if(project.rootProject.file('local.properties').exists()) {
+    apply from: 'https://raw.githubusercontent.com/nuuneoi/JCenter/master/installv1.gradle'
+    apply from: 'https://raw.githubusercontent.com/nuuneoi/JCenter/master/bintrayv1.gradle'
 }

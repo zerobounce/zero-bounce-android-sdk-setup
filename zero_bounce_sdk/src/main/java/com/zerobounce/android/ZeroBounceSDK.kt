@@ -17,6 +17,9 @@ import java.io.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * ZeroBounceSDK
+ */
 class ZeroBounceSDK {
 
     companion object {
