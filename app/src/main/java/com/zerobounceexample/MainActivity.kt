@@ -45,15 +45,27 @@ class MainActivity : AppCompatActivity() {
 
     fun validate() {
         ZeroBounceSDK.validate("<EMAIL_TO_TEST>", null,
-            { rsp -> Log.d("MainActivity", "validate rsp: $rsp") },
-            { error -> Log.e("MainActivity", "validate error: $error") })
+            { rsp ->
+                Log.d("MainActivity", "validate rsp: $rsp")
+                // your implementation
+            },
+            { error ->
+                Log.e("MainActivity", "validate error: $error")
+                // your implementation
+            })
     }
 
 
     fun getCredits() {
         ZeroBounceSDK.getCredits(
-            { rsp -> Log.d("MainActivity", "getCredits rsp: $rsp") },
-            { error -> Log.e("MainActivity", "getCredits error: $error") })
+            { rsp ->
+                Log.d("MainActivity", "getCredits rsp: $rsp")
+                // your implementation
+            },
+            { error ->
+                Log.e("MainActivity", "getCredits error: $error")
+                // your implementation
+            })
     }
 
     fun getApiUsage() {
