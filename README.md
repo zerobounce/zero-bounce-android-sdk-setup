@@ -50,8 +50,9 @@ ZeroBounceSDK.getCredits(
 
 * ##### Check your API usage for a given period of time
 ```java
-Date startDate = new Date();    // The start date of when you want to view API usage
-Date endDate = new Date();      // The end date of when you want to view API usage
+// import java.time.LocalDate
+val startDate = LocalDate.now()    // The start date of when you want to view API usage
+val endDate = LocalDate.now()      // The end date of when you want to view API usage
 
 ZeroBounceSDK.getApiUsage(startDate, endDate,
     { rsp -> 
@@ -66,14 +67,15 @@ ZeroBounceSDK.getApiUsage(startDate, endDate,
 
 * ##### The sendfile API allows user to send a file for bulk email validation
 ```java
-File myFile = new File("<FILE_PATH>");  // The csv or txt file
-Int emailAddressColumn = 3;             // The column index of email address in the file. Index starts at 1
-Int firstNameColumn = 4;                // The column index of first name in the file
-Int lastNameColumn = 5;                 // The column index of last name in the file
-Int genderColumn = 6;                   // The column index of gender in the file
-Int ipAddressColumn = 7;                // The column index of IP address in the file
-Boolean hasHeaderRow = true;            // If this is `true` the first row is considered as table headers 
-String returnUrl = 'https://domain.com/called/after/processing/request';
+// import java.io.File
+val myFile = File("<FILE_PATH>")  // The csv or txt file
+val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
+val firstNameColumn = 4           // The column index of first name in the file
+val lastNameColumn = 5            // The column index of last name in the file
+val genderColumn = 6              // The column index of gender in the file
+val ipAddressColumn = 7           // The column index of IP address in the file
+val hasHeaderRow = true           // If this is `true` the first row is considered as table headers 
+val returnUrl = "https://domain.com/called/after/processing/request"
 
 ZeroBounceSDK.sendFile(
     this.context,
@@ -97,7 +99,7 @@ ZeroBounceSDK.sendFile(
 
 * ##### The getfile API allows users to get the validation results file for the file been submitted using sendfile API
 ```java
-String fileId = "<FILE_ID>";    // The returned file ID when calling sendfile API
+val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
 ZeroBounceSDK.getfile(this.context, fileId,
     { rsp -> 
@@ -112,7 +114,7 @@ ZeroBounceSDK.getfile(this.context, fileId,
 
 * ##### Check the status of a file uploaded via "sendFile" method
 ```java
-String fileId = "<FILE_ID>";    // The returned file ID when calling sendfile API
+val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
 ZeroBounceSDK.fileStatus(this.context, fileId,
     { rsp -> 
@@ -127,7 +129,7 @@ ZeroBounceSDK.fileStatus(this.context, fileId,
 
 * ##### Deletes the file that was submitted using scoring sendfile API. File can be deleted only when its status is _`Complete`_
 ```java
-String fileId = "<FILE_ID>";    // The returned file ID when calling sendfile API
+val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
 
 ZeroBounceSDK.deleteFile(this.context, fileId,
     { rsp -> 
