@@ -141,3 +141,73 @@ ZeroBounceSDK.deleteFile(this.context, fileId,
         // your implementation
     })
 ```
+
+### AI Scoring APIs
+* ##### The scoringSendfile API allows user to send a file for bulk email validation
+```java
+// import java.io.File
+val myFile = File("<FILE_PATH>")  // The csv or txt file
+val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
+val hasHeaderRow = true           // If this is `true` the first row is considered as table headers 
+val returnUrl = "https://domain.com/called/after/processing/request"
+
+ZeroBounceSDK.scoringSendFile(
+    this.context,
+    file,
+    { rsp -> 
+        Log.d("MainActivity", "sendFile rsp: $rsp")
+        // your implementation
+    },
+    { error -> 
+        Log.e("MainActivity", "sendFile error: $error") 
+        // your implementation
+    },
+    returnUrl, 
+    hasHeaderRow
+)
+```
+
+* ##### The scoringGetfile API allows users to get the validation results file for the file been submitted using scoringSendfile API
+```java
+val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendfile API
+
+ZeroBounceSDK.scoringGetfile(this.context, fileId,
+    { rsp -> 
+        Log.d("MainActivity", "getfile rsp: $rsp")
+        // your implementation
+    },
+    { error -> 
+        Log.e("MainActivity", "getfile error: $error") 
+        // your implementation
+    })
+```
+
+* ##### Check the status of a file uploaded via "scoringSendfile" method
+```java
+val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendfile API
+
+ZeroBounceSDK.scoringFileStatus(this.context, fileId,
+    { rsp -> 
+        Log.d("MainActivity", "fileStatus rsp: $rsp")
+        // your implementation
+    },
+    { error -> 
+        Log.e("MainActivity", "fileStatus error: $error") 
+        // your implementation
+    })
+```
+
+* ##### Deletes the file that was submitted using scoring scoringSendfile API. File can be deleted only when its status is _`Complete`_
+```java
+val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendfile API
+
+ZeroBounceSDK.scoringDeleteFile(this.context, fileId,
+    { rsp -> 
+        Log.d("MainActivity", "deleteFile rsp: $rsp")
+        // your implementation
+    },
+    { error -> 
+        Log.e("MainActivity", "deleteFile error: $error") 
+        // your implementation
+    })
+```

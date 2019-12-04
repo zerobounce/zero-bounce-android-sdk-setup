@@ -34,7 +34,8 @@ class ZeroBounceSDK {
 
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
-        private inline fun <reified T : JSONConvertable> String.toObject(): T = Gson().fromJson(this, T::class.java)
+        private inline fun <reified T : JSONConvertable> String.toObject(): T =
+            Gson().fromJson(this, T::class.java)
 
         fun initialize(context: Context, apiKey: String) {
             this.queue = Volley.newRequestQueue(context)
@@ -66,6 +67,29 @@ class ZeroBounceSDK {
         }
 
         /**
+         * @param startDate The start date of when you want to view API usage
+         * @param endDate The end date of when you want to view API usage
+         */
+        fun getApiUsage(
+            startDate: Date, endDate: Date,
+            responseCallback: (response: ZBGetApiUsageResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
+            if (apiKey == null) {
+                errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
+                return
+            }
+
+            request(
+                "$apiBaseUrl/getapiusage?api_key=$apiKey&start_date=${dateFormat.format(startDate)}&end_date=${dateFormat.format(
+                    endDate
+                )}",
+                null, responseCallback,
+                errorCallback
+            )
+        }
+
+        /**
          * This API will tell you how many credits you have left on your account. It's simple, fast and easy to use.
          */
         fun getCredits(
@@ -80,22 +104,64 @@ class ZeroBounceSDK {
             request("$apiBaseUrl/getcredits?api_key=$apiKey", null, responseCallback, errorCallback)
         }
 
+
         /**
          * The sendfile API allows user to send a file for bulk email validation
          */
-        fun sendFile(context: Context,
-                     file: File, email_address_column: Int,
-                     responseCallback: (response: ZBSendFileResponse) -> Unit,
-                     errorCallback: (errorMessage: String?) -> Unit,
-                     returnUrl: String? = null, firstNameColumn: Int? = null, lastNameColumn: Int? = null,
-                     genderColumn: Int? = null, ipAddressColumn: Int? = null, hasHeaderRow: Boolean = false
+        fun sendFile(
+            context: Context,
+            file: File, email_address_column: Int,
+            responseCallback: (response: ZBSendFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit,
+            returnUrl: String? = null, firstNameColumn: Int? = null, lastNameColumn: Int? = null,
+            genderColumn: Int? = null, ipAddressColumn: Int? = null, hasHeaderRow: Boolean = false
+        ) {
+            _sendFile(
+                false,
+                context,
+                file,
+                email_address_column,
+                responseCallback,
+                errorCallback,
+                returnUrl,
+                firstNameColumn,
+                lastNameColumn,
+                genderColumn,
+                ipAddressColumn,
+                hasHeaderRow
+            )
+        }
+
+        /**
+         * The scoringSendFile API allows user to send a file for bulk email validation
+         */
+        fun scoringSendFile(
+            context: Context,
+            file: File, email_address_column: Int,
+            responseCallback: (response: ZBSendFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit,
+            returnUrl: String? = null, hasHeaderRow: Boolean = false
+        ) {
+            _sendFile(
+                true, context, file, email_address_column, responseCallback, errorCallback,
+                returnUrl, hasHeaderRow = hasHeaderRow
+            )
+        }
+
+        private fun _sendFile(
+            scoring: Boolean, context: Context,
+            file: File, email_address_column: Int,
+            responseCallback: (response: ZBSendFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit,
+            returnUrl: String? = null, firstNameColumn: Int? = null, lastNameColumn: Int? = null,
+            genderColumn: Int? = null, ipAddressColumn: Int? = null, hasHeaderRow: Boolean = false
         ) {
             if (apiKey == null) {
                 errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
                 return
             }
 
-            if(!hasPermissions(context, arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE))) {
+            if (!hasPermissions(context, arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE))) {
                 errorCallback("Cannot send file, permissions $READ_EXTERNAL_STORAGE and $WRITE_EXTERNAL_STORAGE are not granted")
                 return
             }
@@ -114,7 +180,10 @@ class ZeroBounceSDK {
             builder.addPart("file", FileBody(file))
             try {
                 builder.addPart("api_key", StringBody(apiKey, ContentType.TEXT_PLAIN))
-                if (returnUrl != null) builder.addPart("return_url", StringBody(returnUrl, ContentType.TEXT_PLAIN))
+                if (returnUrl != null) builder.addPart(
+                    "return_url",
+                    StringBody(returnUrl, ContentType.TEXT_PLAIN)
+                )
                 builder.addPart(
                     "email_address_column",
                     StringBody(email_address_column.toString(), ContentType.TEXT_PLAIN)
@@ -135,13 +204,17 @@ class ZeroBounceSDK {
                     "ip_address_column",
                     StringBody(ipAddressColumn.toString(), ContentType.TEXT_PLAIN)
                 )
-                builder.addPart("has_header_row", StringBody(hasHeaderRow.toString(), ContentType.TEXT_PLAIN))
+                builder.addPart(
+                    "has_header_row",
+                    StringBody(hasHeaderRow.toString(), ContentType.TEXT_PLAIN)
+                )
             } catch (e: UnsupportedEncodingException) {
                 VolleyLog.e("UnsupportedEncodingException")
             }
 
             val r = ZBMultiPartRequest(
-                "$bulkApiBaseUrl/sendFile",
+                bulkApiBaseUrl + (if (scoring) "/scoring" else "") + "/sendFile",
+
                 builder,
                 Response.Listener { response ->
                     if (logEnabled) Log.d("ZeroBounceSDK", "sendFile response: $response")
@@ -149,7 +222,10 @@ class ZeroBounceSDK {
                     responseCallback(rsp)
                 },
                 Response.ErrorListener { error ->
-                    if (logEnabled) Log.d("ZeroBounceSDK", "sendFile error=$error, ${error.networkResponse.data}")
+                    if (logEnabled) Log.d(
+                        "ZeroBounceSDK",
+                        "sendFile error=$error, ${error.networkResponse.data}"
+                    )
                     errorCallback(error.message)
                 })
             queue!!.add(r)
@@ -163,28 +239,76 @@ class ZeroBounceSDK {
             responseCallback: (response: ZBFileStatusResponse) -> Unit,
             errorCallback: (errorMessage: String?) -> Unit
         ) {
-            if (apiKey == null) {
-                errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
-                return
-            }
-
-            request("$bulkApiBaseUrl/filestatus?api_key=$apiKey&file_id=$fileId", null, responseCallback, errorCallback)
+            _fileStatus(false, fileId, responseCallback, errorCallback)
         }
 
         /**
-         * The getfile API allows users to get the validation results file for the file been submitted using sendfile API
+         * @param fileId The returned file ID when calling sendFile API.
          */
-        fun getFile(context: Context,
-                    fileId: String,
-                    responseCallback: (response: ZBGetFileResponse) -> Unit,
-                    errorCallback: (errorMessage: String?) -> Unit
+        fun scoringFileStatus(
+            fileId: String,
+            responseCallback: (response: ZBFileStatusResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
+            _fileStatus(true, fileId, responseCallback, errorCallback)
+        }
+
+        private fun _fileStatus(
+            scoring: Boolean,
+            fileId: String,
+            responseCallback: (response: ZBFileStatusResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
         ) {
             if (apiKey == null) {
                 errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
                 return
             }
 
-            if(!hasPermissions(context, arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE))) {
+            request(
+                bulkApiBaseUrl + (if (scoring) "/scoring" else "") + "/filestatus?api_key=$apiKey&file_id=$fileId",
+                null,
+                responseCallback,
+                errorCallback
+            )
+        }
+
+        /**
+         * The getfile API allows users to get the validation results file for the file been submitted using sendfile API
+         */
+        fun getFile(
+            context: Context,
+            fileId: String,
+            responseCallback: (response: ZBGetFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
+            _getFile(false, context, fileId, responseCallback, errorCallback)
+        }
+
+        /**
+         * The scoringGetFile API allows users to get the validation results file for the file been submitted using scoringSendFile API
+         */
+        fun scoringGetFile(
+            context: Context,
+            fileId: String,
+            responseCallback: (response: ZBGetFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
+            _getFile(true, context, fileId, responseCallback, errorCallback)
+        }
+
+        private fun _getFile(
+            scoring: Boolean,
+            context: Context,
+            fileId: String,
+            responseCallback: (response: ZBGetFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
+            if (apiKey == null) {
+                errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
+                return
+            }
+
+            if (!hasPermissions(context, arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE))) {
                 errorCallback("Cannot get file, permissions $READ_EXTERNAL_STORAGE and $WRITE_EXTERNAL_STORAGE are not granted")
                 return
             }
@@ -195,13 +319,14 @@ class ZeroBounceSDK {
             }
 
             val req = ZBByteArrayRequest(Request.Method.GET,
-                "$bulkApiBaseUrl/getFile?api_key=$apiKey&file_id=$fileId",
+                bulkApiBaseUrl +(if (scoring) "/scoring" else "")+"/getFile?api_key=$apiKey&file_id=$fileId",
                 Response.Listener { response ->
                     val f = File(Environment.getExternalStorageDirectory().path + "/ZeroBounce")
                     if (!f.isDirectory) f.mkdir()
 
                     val fileName = response.fileName ?: "$fileId.csv"
-                    val filePath = Environment.getExternalStorageDirectory().path + "/ZeroBounce/" + fileName
+                    val filePath =
+                        Environment.getExternalStorageDirectory().path + "/ZeroBounce/" + fileName
 
                     try {
                         val file = FileOutputStream(filePath)
@@ -226,7 +351,11 @@ class ZeroBounceSDK {
         /**
          * @param fileId The returned file ID when calling sendfile API.
          */
-        fun deleteFile(fileId: String, successCallback: (response: ZBDeleteFileResponse) -> Unit, errorCallback: (errorMessage: String?) -> Unit) {
+        fun deleteFile(
+            fileId: String,
+            successCallback: (response: ZBDeleteFileResponse) -> Unit,
+            errorCallback: (errorMessage: String?) -> Unit
+        ) {
             if (apiKey == null) {
                 errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
                 return
@@ -240,28 +369,6 @@ class ZeroBounceSDK {
             )
         }
 
-        /**
-         * @param startDate The start date of when you want to view API usage
-         * @param endDate The end date of when you want to view API usage
-         */
-        fun getApiUsage(
-            startDate: Date, endDate: Date,
-            responseCallback: (response: ZBGetApiUsageResponse) -> Unit,
-            errorCallback: (errorMessage: String?) -> Unit
-        ) {
-            if (apiKey == null) {
-                errorCallback("ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first")
-                return
-            }
-
-            request(
-                "$apiBaseUrl/getapiusage?api_key=$apiKey&start_date=${dateFormat.format(startDate)}&end_date=${dateFormat.format(
-                    endDate
-                )}",
-                null, responseCallback,
-                errorCallback
-            )
-        }
 
         private inline fun <reified T> request(
             url: String, req: JSONConvertable?,
@@ -275,18 +382,19 @@ class ZeroBounceSDK {
             }
 
             val jsonData = req?.toJSON()
-            if(logEnabled) Log.d("ZeroBounceSDK", "request url: $url")
-            val jsonObjectRequest = JsonObjectRequest(if (jsonData != null) Request.Method.POST else Request.Method.GET,
-                url, if (jsonData != null) JSONObject(jsonData) else null,
-                Response.Listener { response ->
-                    if(logEnabled) Log.d("ZeroBounceSDK", "response: $response")
-                    val rsp = response.toString().toObject<T>()
-                    responseCallback(rsp)
-                },
-                Response.ErrorListener { error ->
-                    errorCallback(error.message)
-                }
-            )
+            if (logEnabled) Log.d("ZeroBounceSDK", "request url: $url")
+            val jsonObjectRequest =
+                JsonObjectRequest(if (jsonData != null) Request.Method.POST else Request.Method.GET,
+                    url, if (jsonData != null) JSONObject(jsonData) else null,
+                    Response.Listener { response ->
+                        if (logEnabled) Log.d("ZeroBounceSDK", "response: $response")
+                        val rsp = response.toString().toObject<T>()
+                        responseCallback(rsp)
+                    },
+                    Response.ErrorListener { error ->
+                        errorCallback(error.message)
+                    }
+                )
             queue!!.add(jsonObjectRequest)
         }
 
@@ -299,7 +407,8 @@ class ZeroBounceSDK {
 
             val res = context.checkCallingOrSelfPermission(permission)
 
-            if(logEnabled) Log.v("ZeroBounce", "permission: " + permission + " = \t\t" +
+            if (logEnabled) Log.v(
+                "ZeroBounce", "permission: " + permission + " = \t\t" +
                         if (res == PackageManager.PERMISSION_GRANTED) "GRANTED" else "DENIED"
             )
 
