@@ -1,7 +1,8 @@
 package com.zerobounce.android
 
-import com.google.gson.annotations.SerializedName
-
-class ZBGetFileResponse(
-    @SerializedName("localFilePath") val localFilePath: String
+/**
+ * The model used for the GET /scoring and GET /getFile requests.
+ */
+data class ZBGetFileResponse(
+    val localFilePath: String
 ) : JSONConvertable

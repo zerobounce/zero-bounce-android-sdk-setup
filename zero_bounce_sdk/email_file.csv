@@ -1,0 +1,3 @@
+email_address_column, first_name_column, last_name_column
+disposable@example.com, Disposable, Example
+invalid@example.com, Invalid, Example

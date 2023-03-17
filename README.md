@@ -16,15 +16,18 @@ import com.zerobounce.android.ZeroBounceSDK
 ```
 
 Initialize the sdk with your api key:
-```kotlin 
-ZeroBounceSDK.initialize(this.applicationContext, "<YOUR_API_KEY>")
+```kotlin
+ZeroBounceSDK.initialize("<YOUR_API_KEY>")
 ```
 
 ## Examples
 Then you can use any of the SDK methods, for example:
+
 * ##### Validate an email address
 ```kotlin
-ZeroBounceSDK.validate("<EMAIL_TO_TEST>", "<OPTIONAL_IP_ADDRESS>",
+ZeroBounceSDK.validate(
+    "<EMAIL_TO_TEST>", 
+    "<OPTIONAL_IP_ADDRESS>",
     { rsp -> 
         Log.d("MainActivity", "validate rsp: $rsp")
         // your implementation
@@ -32,7 +35,8 @@ ZeroBounceSDK.validate("<EMAIL_TO_TEST>", "<OPTIONAL_IP_ADDRESS>",
     { error -> 
         Log.e("MainActivity", "validate error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
 * ##### Check how many credits you have left on your account
@@ -45,16 +49,19 @@ ZeroBounceSDK.getCredits(
     { error -> 
         Log.e("MainActivity", "getCredits error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
 * ##### Check your API usage for a given period of time
-```java
+```kotlin
 // import java.time.LocalDate
 val startDate = LocalDate.now()    // The start date of when you want to view API usage
 val endDate = LocalDate.now()      // The end date of when you want to view API usage
 
-ZeroBounceSDK.getApiUsage(startDate, endDate,
+ZeroBounceSDK.getApiUsage(
+    startDate, 
+    endDate,
     { rsp -> 
         Log.d("MainActivity", "getApiUsage rsp: $rsp")
         // your implementation
@@ -62,11 +69,12 @@ ZeroBounceSDK.getApiUsage(startDate, endDate,
     { error -> 
         Log.e("MainActivity", "getApiUsage error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-* ##### The sendfile API allows user to send a file for bulk email validation
-```java
+* ##### The *sendFile* API allows user to send a file for bulk email validation
+```kotlin
 // import java.io.File
 val myFile = File("<FILE_PATH>")  // The csv or txt file
 val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
@@ -78,30 +86,32 @@ val hasHeaderRow = true           // If this is `true` the first row is consider
 val returnUrl = "https://domain.com/called/after/processing/request"
 
 ZeroBounceSDK.sendFile(
-    this.context,
+    context,
     file,
-    { rsp -> 
-        Log.d("MainActivity", "sendFile rsp: $rsp")
-        // your implementation
-    },
-    { error -> 
-        Log.e("MainActivity", "sendFile error: $error") 
-        // your implementation
-    },
     returnUrl, 
     firstNameColumn, 
     lastNameColumn,
     genderColumn, 
     ipAddressColumn, 
-    hasHeaderRow
+    hasHeaderRow,
+    { rsp ->
+        Log.d("MainActivity", "sendFile rsp: $rsp")
+        // your implementation
+    },
+    { error ->
+        Log.e("MainActivity", "sendFile error: $error")
+        // your implementation
+    },
 )
 ```
 
-* ##### The getfile API allows users to get the validation results file for the file been submitted using sendfile API
-```java
+* ##### The *getFile* API allows users to get the validation results file for the file been submitted using *sendFile* API
+```kotlin
 val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
-ZeroBounceSDK.getfile(this.context, fileId,
+ZeroBounceSDK.getfile(
+    context, 
+    fileId,
     { rsp -> 
         Log.d("MainActivity", "getfile rsp: $rsp")
         // your implementation
@@ -109,14 +119,17 @@ ZeroBounceSDK.getfile(this.context, fileId,
     { error -> 
         Log.e("MainActivity", "getfile error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-* ##### Check the status of a file uploaded via "sendFile" method
-```java
+* ##### Check the status of a file uploaded via *sendFile* method
+```kotlin
 val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
-ZeroBounceSDK.fileStatus(this.context, fileId,
+ZeroBounceSDK.fileStatus(
+    context, 
+    fileId,
     { rsp -> 
         Log.d("MainActivity", "fileStatus rsp: $rsp")
         // your implementation
@@ -124,14 +137,17 @@ ZeroBounceSDK.fileStatus(this.context, fileId,
     { error -> 
         Log.e("MainActivity", "fileStatus error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-* ##### Deletes the file that was submitted using scoring sendfile API. File can be deleted only when its status is _`Complete`_
-```java
+* ##### Deletes the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
+```kotlin
 val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
 
-ZeroBounceSDK.deleteFile(this.context, fileId,
+ZeroBounceSDK.deleteFile(
+    context,
+    fileId,
     { rsp -> 
         Log.d("MainActivity", "deleteFile rsp: $rsp")
         // your implementation
@@ -139,12 +155,30 @@ ZeroBounceSDK.deleteFile(this.context, fileId,
     { error -> 
         Log.e("MainActivity", "deleteFile error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-### AI Scoring APIs
-* ##### The scoringSendfile API allows user to send a file for bulk email validation
-```java
+* ##### Gather insights into your subscribers’ overall email engagement. The request returns data regarding opens, clicks, forwards and unsubscribes that have taken place in the past 30, 90, 180 or 365 days.
+```kotlin
+ZeroBounceSDK.getActivityData(
+    "<EMAIL_TO_TEST>",
+    { rsp -> 
+        Log.d("MainActivity", "validate rsp: $rsp")
+        // your implementation
+    },
+    { error -> 
+        Log.e("MainActivity", "validate error: $error") 
+        // your implementation
+    }
+)
+```
+
+
+### AI Scoring API
+
+* ##### The *scoringSendFile* API allows user to send a file for bulk email validation
+```kotlin
 // import java.io.File
 val myFile = File("<FILE_PATH>")  // The csv or txt file
 val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
@@ -152,62 +186,75 @@ val hasHeaderRow = true           // If this is `true` the first row is consider
 val returnUrl = "https://domain.com/called/after/processing/request"
 
 ZeroBounceSDK.scoringSendFile(
-    this.context,
+    context,
     file,
-    { rsp -> 
-        Log.d("MainActivity", "sendFile rsp: $rsp")
-        // your implementation
-    },
-    { error -> 
-        Log.e("MainActivity", "sendFile error: $error") 
-        // your implementation
-    },
+    emailAddressColumn,
     returnUrl, 
-    hasHeaderRow
+    hasHeaderRow,
+    { rsp ->
+        Log.d("MainActivity", "scoringSendFile rsp: $rsp")
+        // your implementation
+    },
+    { error ->
+        Log.e("MainActivity", "scoringSendFile error: $error")
+        // your implementation
+    }
 )
 ```
 
-* ##### The scoringGetfile API allows users to get the validation results file for the file been submitted using scoringSendfile API
-```java
-val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendfile API
+* ##### The *scoringGetFile* API allows users to get the validation results file for the file been submitted using *scoringSendFile* API
+```kotlin
+val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
 
-ZeroBounceSDK.scoringGetfile(this.context, fileId,
+ZeroBounceSDK.scoringGetfile(
+    context, 
+    fileId,
     { rsp -> 
-        Log.d("MainActivity", "getfile rsp: $rsp")
+        Log.d("MainActivity", "scoringGetfile rsp: $rsp")
         // your implementation
     },
     { error -> 
-        Log.e("MainActivity", "getfile error: $error") 
+        Log.e("MainActivity", "scoringGetfile error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-* ##### Check the status of a file uploaded via "scoringSendfile" method
-```java
-val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendfile API
+* ##### Check the status of a file uploaded via *scoringSendFile* method
+```kotlin
+val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
 
-ZeroBounceSDK.scoringFileStatus(this.context, fileId,
+ZeroBounceSDK.scoringFileStatus(
+    context, 
+    fileId,
     { rsp -> 
-        Log.d("MainActivity", "fileStatus rsp: $rsp")
+        Log.d("MainActivity", "scoringFileStatus rsp: $rsp")
         // your implementation
     },
     { error -> 
-        Log.e("MainActivity", "fileStatus error: $error") 
+        Log.e("MainActivity", "scoringFileStatus error: $error") 
         // your implementation
-    })
+    }
+)
 ```
 
-* ##### Deletes the file that was submitted using scoring scoringSendfile API. File can be deleted only when its status is _`Complete`_
-```java
-val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendfile API
+* ##### Deletes the file that was submitted using scoring *scoringSendFile* API. File can be deleted only when its status is `Complete`
+```kotlin
+val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendFile API
 
-ZeroBounceSDK.scoringDeleteFile(this.context, fileId,
+ZeroBounceSDK.scoringDeleteFile(
+    context, 
+    fileId,
     { rsp -> 
-        Log.d("MainActivity", "deleteFile rsp: $rsp")
+        Log.d("MainActivity", "scoringDeleteFile rsp: $rsp")
         // your implementation
     },
     { error -> 
-        Log.e("MainActivity", "deleteFile error: $error") 
+        Log.e("MainActivity", "scoringDeleteFile error: $error") 
         // your implementation
-    })
+    }
+)
 ```
+
+## Documentation
+The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk > Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html``` file.
