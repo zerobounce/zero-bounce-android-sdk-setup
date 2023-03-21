@@ -1,4 +1,7 @@
 ## ZeroBounce Android SDK
+
+[![Publish](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
+
 This SDK contains methods for interacting easily with ZeroBounce API.
 More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/).
 
