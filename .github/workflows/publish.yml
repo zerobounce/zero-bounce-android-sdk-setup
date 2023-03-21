@@ -6,7 +6,8 @@ on:
     types: [released]
 
 jobs:
-  test:
+  publish:
+    name: Test, Release build and publish
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -15,21 +16,11 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: 8
+          distribution: 'temurin'
 
       # Execute unit tests
       - name: Unit Test
         run: ./gradlew zero_bounce_sdk:testDebugUnitTest
-
-  publish:
-    name: Release build and publish
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
-        with:
-          java-version: 8
 
         # Builds the release artifacts of the library
       - name: Release build
