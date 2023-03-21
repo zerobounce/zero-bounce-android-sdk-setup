@@ -38,8 +38,6 @@ afterEvaluate {
     publishing {
         publications {
             release(MavenPublication) {
-                // The coordinates of the library, being set from variables that
-                // we'll set up later
                 groupId PUBLISH_GROUP_ID
                 artifactId PUBLISH_ARTIFACT_ID
                 version PUBLISH_VERSION
@@ -54,7 +52,6 @@ afterEvaluate {
                 artifact androidSourcesJar
                 artifact javadocJar
 
-                // Mostly self-explanatory metadata
                 pom {
                     name = PUBLISH_ARTIFACT_ID
                     description = 'The ZeroBounce SDK for Android'
@@ -73,8 +70,6 @@ afterEvaluate {
                         }
                     }
 
-                    // Version control info - if you're using GitHub, follow the 
-                    // format as seen here
                     scm {
                         connection = 'scm:git:github.com/zerobounce-llc/zero-bounce-android-sdk-setup.git'
                         developerConnection = 'scm:git:ssh:/github.com/zerobounce-llc/zero-bounce-android-sdk-setup.git'

@@ -1,10 +1,13 @@
 name: Publish
 
-on: push
+on:
+  release:
+    # We'll run this workflow when a new GitHub release is created
+    types: [released]
 
 jobs:
   publish:
-    name: Test, Release build and publish
+    name: Test, release build and publish
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
