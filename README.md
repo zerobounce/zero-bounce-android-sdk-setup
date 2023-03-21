@@ -141,7 +141,7 @@ ZeroBounceSDK.fileStatus(
 )
 ```
 
-* ##### Deletes the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
+* ##### Delete the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
 ```kotlin
 val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
 
@@ -238,7 +238,7 @@ ZeroBounceSDK.scoringFileStatus(
 )
 ```
 
-* ##### Deletes the file that was submitted using scoring *scoringSendFile* API. File can be deleted only when its status is `Complete`
+* ##### Delete the file that was submitted using scoring *scoringSendFile* API. File can be deleted only when its status is `Complete`
 ```kotlin
 val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendFile API
 

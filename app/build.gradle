@@ -34,8 +34,10 @@ dependencies {
     implementation 'com.google.android.material:material:1.8.0'
     implementation 'com.android.support:multidex:1.0.3'
 
+    // Replace the local import with the remote import if you want to use the latest version from
+    // Maven Central
     implementation project(path: ':zero_bounce_sdk')
-//    implementation 'com.zerobounce.android:zerobouncesdk:1.0.0'
+//    implementation 'com.zerobounce.android:zerobouncesdk:1.1.0'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
