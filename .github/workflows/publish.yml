@@ -18,7 +18,7 @@ jobs:
 
       # Execute unit tests
       - name: Unit Test
-        run: ./gradlew testDebugUnitTest
+        run: ./gradlew zero_bounce_sdk:testDebugUnitTest
 
   publish:
     name: Release build and publish
