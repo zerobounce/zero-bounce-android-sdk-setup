@@ -1,15 +1,16 @@
 ## ZeroBounce Android SDK
 
-[![Publish](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
 
 This SDK contains methods for interacting easily with ZeroBounce API.
-More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/).
+More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
+This SDK is built using the Java 11 version.
 
 ### Installation
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
-```
-implementation 'com.zerobounce.android:zerobouncesdk:1.0.0'
+```gradle
+implementation 'com.zerobounce.android:zerobouncesdk:1.1.1'
 ```
 
 ## USAGE
