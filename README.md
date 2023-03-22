@@ -262,3 +262,38 @@ ZeroBounceSDK.scoringDeleteFile(
 
 ## Documentation
 The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk > Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html``` file.
+
+
+## Publication
+Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. Don't forget to update the version before doing a release!
+If you ever change the OSSRH login credentials, you'll need to also update the repository variables on Github.
+If you want to manually publish to the Nexus repository (and then release it to Maven Central), you can use the following commands:
+```shell
+# For publishing to the staging repository
+./gradlew publishReleasePublicationToSonatypeRepository
+
+# For closing and releasing the artifact.
+./gradlew closeAndReleaseSonatypeStagingRepository
+```
+
+Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After **releasing** the artifact, it will take:
+- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.1)
+- 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
+
+
+## Exporting and importing PGP keys
+1. Export the keys:
+    ```shell
+    gpg --export -a <LAST_8_DIGITS> > public.key
+    gpg --export-secret-key -a <LAST_8_DIGITS> > private key
+    ```
+2. Import the keys:
+    ```shell
+    gpg --import public.key
+    gpg --import private.key
+    ```
+3. Check that the new keys are imported:
+    ```shell
+    gpg --list-keys
+    gpg --list-secret-keys
+    ```
