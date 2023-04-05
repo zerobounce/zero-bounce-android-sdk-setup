@@ -267,6 +267,30 @@ The documentation of the SDK can be generated through a *Gradle* task. Open the 
 ## Publication
 Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. Don't forget to update the version before doing a release!
 If you ever change the OSSRH login credentials, you'll need to also update the repository variables on Github.
+
+
+### Local setup for manual release
+In order to be able to publish to the Nexus repository from you local machine, you'll need to do a few steps:
+1. Create a/Update the `local.properties` file, in the project root, like this:
+    ```gradle
+    ## This file must *NOT* be checked into Version Control Systems,
+    # as it contains information specific to your local configuration.
+    #
+    # Location of the SDK. This is only used by Gradle.
+    # For customization when using a Version Control System, please read the
+    # header note.
+    #Mon Mar 20 10:30:40 EET 2023
+    sdk.dir=<YOUR_ANDROID_SDK_DIR>
+    signing.keyId=<THE_LAST_8_DIGITS_OF_YOUR_GPG_KEY>
+    signing.password=<YOUR_GPG_PASSWORD>
+    signing.key=<YOUR_GPG_PRIVATE_KEY>  # newlines must be replaced with the newline character '\n'
+    ossrhUsername=<YOUR_SONATYPE_JIRA_USERNAME>
+    ossrhPassword=<YOUR_SONATYPE_JIRA_PASSWORD>
+    sonatypeStagingProfileId=<YOUR_SONATYPE_STAGING_PROFILE_ID>
+    ```
+2. Import the GPG private key to your local machine (see below)
+
+
 If you want to manually publish to the Nexus repository (and then release it to Maven Central), you can use the following commands:
 ```shell
 # For publishing to the staging repository
