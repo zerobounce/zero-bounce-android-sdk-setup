@@ -8,5 +8,7 @@ import com.google.gson.annotations.SerializedName
 data class ZBValidateBatchResponse(
 
     @SerializedName("email_batch")
-    val emailBatch: List<ZBValidateResponse>
+    val emailBatch: List<ZBValidateResponse>,
+
+    val errors: List<LinkedHashMap<String, Any?>>? = null
 ): JSONConvertable
