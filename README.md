@@ -43,6 +43,35 @@ ZeroBounceSDK.validate(
 )
 ```
 
+* ##### Validate a batch email addresses
+```kotlin
+val emails = listOf(
+    mapOf(
+        "email_address" to "valid@example.com",
+        "ip_address" to "1.1.1.1"
+    ),
+    mapOf(
+        "email_address" to "invalid@example.com",
+        "ip_address" to "1.1.1.1"
+    ),
+    mapOf(
+        "email_address" to "disposable@example.com",
+        "ip_address" to null
+    )
+)
+ZeroBounceSDK.validateBatch(
+    emails,
+    { rsp ->
+        Log.d("MainActivity", "validate batch rsp: $rsp")
+        // your implementation
+    },
+    { error ->
+        Log.e("MainActivity", "validate batch error: $error")
+        // your implementation
+    }
+)
+```
+
 * ##### Check how many credits you have left on your account
 ```kotlin
 ZeroBounceSDK.getCredits(
@@ -113,7 +142,7 @@ ZeroBounceSDK.sendFile(
 ```kotlin
 val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
-ZeroBounceSDK.getfile(
+ZeroBounceSDK.getFile(
     context, 
     fileId,
     { rsp -> 
@@ -210,15 +239,15 @@ ZeroBounceSDK.scoringSendFile(
 ```kotlin
 val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
 
-ZeroBounceSDK.scoringGetfile(
+ZeroBounceSDK.scoringGetFile(
     context, 
     fileId,
     { rsp -> 
-        Log.d("MainActivity", "scoringGetfile rsp: $rsp")
+        Log.d("MainActivity", "scoringGetFile rsp: $rsp")
         // your implementation
     },
     { error -> 
-        Log.e("MainActivity", "scoringGetfile error: $error") 
+        Log.e("MainActivity", "scoringGetFile error: $error")
         // your implementation
     }
 )

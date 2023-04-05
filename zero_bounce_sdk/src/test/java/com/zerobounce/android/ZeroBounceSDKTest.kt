@@ -18,6 +18,7 @@ import org.mockito.junit.MockitoJUnitRunner
 import java.io.File
 import java.util.*
 import java.util.concurrent.CountDownLatch
+import kotlin.collections.LinkedHashMap
 
 @RunWith(MockitoJUnitRunner::class)
 class ZeroBounceSDKTest {
@@ -150,6 +151,184 @@ class ZeroBounceSDKTest {
 
             // Check the API Key is not missing
             assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun validateBatchEmails_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\n" +
+                "      \"email_batch\": [\n" +
+                "          {\n" +
+                "              \"address\": \"valid@example.com\",\n" +
+                "              \"status\": \"valid\",\n" +
+                "              \"sub_status\": \"\",\n" +
+                "              \"free_email\": false,\n" +
+                "              \"did_you_mean\": null,\n" +
+                "              \"account\": null,\n" +
+                "              \"domain\": null,\n" +
+                "              \"domain_age_days\": \"9692\",\n" +
+                "              \"smtp_provider\": \"example\",\n" +
+                "              \"mx_found\": \"true\",\n" +
+                "              \"mx_record\": \"mx.example.com\",\n" +
+                "              \"firstname\": \"zero\",\n" +
+                "              \"lastname\": \"bounce\",\n" +
+                "              \"gender\": \"male\",\n" +
+                "              \"country\": null,\n" +
+                "              \"region\": null,\n" +
+                "              \"city\": null,\n" +
+                "              \"zipcode\": null,\n" +
+                "              \"processed_at\": \"2020-09-17 17:43:11.829\"\n" +
+                "          },\n" +
+                "          {\n" +
+                "              \"address\": \"invalid@example.com\",\n" +
+                "              \"status\": \"invalid\",\n" +
+                "              \"sub_status\": \"mailbox_not_found\",\n" +
+                "              \"free_email\": false,\n" +
+                "              \"did_you_mean\": null,\n" +
+                "              \"account\": null,\n" +
+                "              \"domain\": null,\n" +
+                "              \"domain_age_days\": \"9692\",\n" +
+                "              \"smtp_provider\": \"example\",\n" +
+                "              \"mx_found\": \"true\",\n" +
+                "              \"mx_record\": \"mx.example.com\",\n" +
+                "              \"firstname\": \"zero\",\n" +
+                "              \"lastname\": \"bounce\",\n" +
+                "              \"gender\": \"male\",\n" +
+                "              \"country\": null,\n" +
+                "              \"region\": null,\n" +
+                "              \"city\": null,\n" +
+                "              \"zipcode\": null,\n" +
+                "              \"processed_at\": \"2020-09-17 17:43:11.830\"\n" +
+                "          },\n" +
+                "          {\n" +
+                "              \"address\": \"disposable@example.com\",\n" +
+                "              \"status\": \"do_not_mail\",\n" +
+                "              \"sub_status\": \"disposable\",\n" +
+                "              \"free_email\": false,\n" +
+                "              \"did_you_mean\": null,\n" +
+                "              \"account\": null,\n" +
+                "              \"domain\": null,\n" +
+                "              \"domain_age_days\": \"9692\",\n" +
+                "              \"smtp_provider\": \"example\",\n" +
+                "              \"mx_found\": \"true\",\n" +
+                "              \"mx_record\": \"mx.example.com\",\n" +
+                "              \"firstname\": \"zero\",\n" +
+                "              \"lastname\": \"bounce\",\n" +
+                "              \"gender\": \"male\",\n" +
+                "              \"country\": null,\n" +
+                "              \"region\": null,\n" +
+                "              \"city\": null,\n" +
+                "              \"zipcode\": null,\n" +
+                "              \"processed_at\": \"2020-09-17 17:43:11.830\"\n" +
+                "          }\n" +
+                "      ],\n" +
+                "      \"errors\": []\n" +
+                "  }"
+        val expectedResponse = gson.fromJson(responseJson, ZBValidateBatchResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        val emailsData = listOf(
+            ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "invalid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "disposable@example.com", ip = null)
+        )
+
+        // Do the actual request
+        ZeroBounceSDK.validateBatch(
+            emailsData,
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            val bodyJson = gson.fromJson(request.body.readUtf8(), LinkedHashMap::class.java)
+            assertTrue("api_key" in bodyJson)
+            assertEquals(API_KEY, bodyJson["api_key"])
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the response from the server matches the expected response.
+        assertEquals(expectedResponse, actualResponse)
+
+        // Test that the actualResponse is an instance of the ZBValidateBatchResponse class
+        assertTrue(actualResponse is ZBValidateBatchResponse)
+        val temp = (actualResponse as ZBValidateBatchResponse).toJSON()
+        assertEquals(actualResponse, gson.fromJson(temp, ZBValidateBatchResponse::class.java))
+    }
+
+    @Test
+    fun validateBatchEmails_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\n" +
+                "      \"email_batch\": [],\n" +
+                "      \"errors\": [\n" +
+                "          {\n" +
+                "              \"error\": \"Invalid API Key or your account ran out of credits\",\n" +
+                "              \"email_address\": \"all\"\n" +
+                "          }\n" +
+                "      ]\n" +
+                "    }"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        val emailsData = listOf(
+            ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "invalid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "disposable@example.com", ip = null)
+        )
+
+        // Do the actual request
+        ZeroBounceSDK.validateBatch(
+            emailsData,
+            {
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            val bodyJson = gson.fromJson(request.body.readUtf8(), LinkedHashMap::class.java)
+            assertTrue("api_key" in bodyJson)
+            assertEquals(API_KEY, bodyJson["api_key"])
         }
 
         // Await for the response to be parsed

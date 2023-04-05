@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.zerobounce.android.ZBValidateBatchData
 import com.zerobounce.android.ZeroBounceSDK
 import java.io.File
 import java.util.*
@@ -31,6 +32,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         when (v?.id) {
             R.id.fab -> {
 //                validate("<EMAIL_TO_TEST>")
+
+//                validateBatch()
 
                 getCredits()
 
@@ -77,6 +80,28 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             },
             { error ->
                 Log.e("MainActivity", "validate error: $error")
+                // your implementation
+            }
+        )
+    }
+
+    /**
+     * Calls the *validate batch* method of the [ZeroBounceSDK].
+     */
+    fun validateBatch() {
+        val emailsData = listOf(
+            ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "invalid@example.com", ip = "1.1.1.1"),
+            ZBValidateBatchData(email = "disposable@example.com", ip = null)
+        )
+        ZeroBounceSDK.validateBatch(
+            emailsData,
+            { rsp ->
+                Log.d("MainActivity", "batch validate rsp: $rsp")
+                // your implementation
+            },
+            { error ->
+                Log.e("MainActivity", "batch validate error: $error")
                 // your implementation
             }
         )

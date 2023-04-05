@@ -3,7 +3,7 @@ package com.zerobounce.android
 import com.google.gson.annotations.SerializedName
 
 /**
- * The model used for the GET /scoring and GET /sendFile requests.
+ * The model used for the GET /scoring and GET /sendfile requests.
  */
 data class ZBSendFileResponse(
     val success: Boolean = false,

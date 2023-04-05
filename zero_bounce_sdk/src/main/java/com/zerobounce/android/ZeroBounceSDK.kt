@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import com.google.gson.FieldNamingPolicy
+import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -72,6 +74,34 @@ object ZeroBounceSDK {
         request(
             url = "$apiBaseUrl/validate?api_key=$apiKey&email=$email&ip_address=$ipAddressPart",
             body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Validates a batch of emails.
+     *
+     * @param emails the email addresses you want to validate
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
+     */
+    fun validateBatch(
+        emails: List<ZBValidateBatchData>,
+        responseCallback: (response: ZBValidateBatchResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        val apiKey = apiKey ?: return
+
+        val body = mapOf(
+            "api_key" to apiKey,
+            "email_batch" to emails
+        )
+
+        request(
+            url = "$apiBaseUrl/validatebatch",
+            body = body,
             responseCallback = responseCallback,
             errorCallback = errorCallback
         )
@@ -296,7 +326,7 @@ object ZeroBounceSDK {
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val requestBuilder = Request.Builder()
-            .url("$baseUrl/sendFile")
+            .url("$baseUrl/sendfile")
             .post(builder.build())
 
         val request = requestBuilder.build()
@@ -479,7 +509,7 @@ object ZeroBounceSDK {
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val requestBuilder = Request.Builder()
-            .url("$baseUrl/getFile?api_key=$apiKey&file_id=$fileId")
+            .url("$baseUrl/getfile?api_key=$apiKey&file_id=$fileId")
 
         val request = requestBuilder.build()
 
@@ -633,7 +663,7 @@ object ZeroBounceSDK {
      */
     private inline fun <reified T> request(
         url: String,
-        body: Map<String, String>?,
+        body: Map<String, Any>?,
         crossinline responseCallback: (response: T?) -> Unit,
         crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) where T : JSONConvertable {
@@ -645,11 +675,9 @@ object ZeroBounceSDK {
             .url(url)
 
         if (body != null) {
-            val formBodyBuilder = FormBody.Builder()
-            for (entry in body) {
-                formBodyBuilder.add(entry.key, entry.value)
-            }
-            requestBuilder.post(formBodyBuilder.build())
+            val requestBody =
+                Gson().toJson(body).toRequestBody("application/json".toMediaTypeOrNull())
+            requestBuilder.post(requestBody)
         }
 
         val request = requestBuilder.build()
