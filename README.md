@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.1'
+implementation 'com.zerobounce.android:zerobouncesdk:1.1.2'
 ```
 
 ## USAGE
@@ -43,30 +43,21 @@ ZeroBounceSDK.validate(
 )
 ```
 
-* ##### Validate a batch email addresses
+* ##### Validate batch a list of email addresses
 ```kotlin
-val emails = listOf(
-    mapOf(
-        "email_address" to "valid@example.com",
-        "ip_address" to "1.1.1.1"
-    ),
-    mapOf(
-        "email_address" to "invalid@example.com",
-        "ip_address" to "1.1.1.1"
-    ),
-    mapOf(
-        "email_address" to "disposable@example.com",
-        "ip_address" to null
-    )
+val emailsData = listOf(
+    ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
+    ZBValidateBatchData(email = "invalid@example.com", ip = "1.1.1.1"),
+    ZBValidateBatchData(email = "disposable@example.com", ip = null)
 )
 ZeroBounceSDK.validateBatch(
-    emails,
+    emailsData,
     { rsp ->
-        Log.d("MainActivity", "validate batch rsp: $rsp")
+        Log.d("MainActivity", "validateBatch rsp: $rsp")
         // your implementation
     },
     { error ->
-        Log.e("MainActivity", "validate batch error: $error")
+        Log.e("MainActivity", "validateBatch error: $error")
         // your implementation
     }
 )

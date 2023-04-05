@@ -97,11 +97,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         ZeroBounceSDK.validateBatch(
             emailsData,
             { rsp ->
-                Log.d("MainActivity", "batch validate rsp: $rsp")
+                Log.d("MainActivity", "validateBatch rsp: $rsp")
                 // your implementation
             },
             { error ->
-                Log.e("MainActivity", "batch validate error: $error")
+                Log.e("MainActivity", "validateBatch error: $error")
                 // your implementation
             }
         )
