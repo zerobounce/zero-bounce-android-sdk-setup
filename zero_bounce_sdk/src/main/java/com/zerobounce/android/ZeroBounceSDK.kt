@@ -26,9 +26,9 @@ object ZeroBounceSDK {
 
     private var apiKey: String? = null
     private lateinit var client: OkHttpClient
-    internal var apiBaseUrl = "https://api.zerobounce.net/v2"
-    internal var bulkApiBaseUrl = "https://bulkapi.zerobounce.net/v2"
-    internal var bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.net/v2/scoring"
+    internal var apiBaseUrl = "https://api.zerobounce.in/v2"
+    internal var bulkApiBaseUrl = "https://bulkapi.zerobounce.in/v2"
+    internal var bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.in/v2/scoring"
 
     private const val READ_EXTERNAL_STORAGE = Manifest.permission.READ_EXTERNAL_STORAGE
     private const val WRITE_EXTERNAL_STORAGE = Manifest.permission.WRITE_EXTERNAL_STORAGE
