@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.in.android:zerobouncesdk:1.1.3'
+implementation 'com.zerobounce.in.android:zerobouncesdk:1.1.4'
 ```
 
 ## USAGE
