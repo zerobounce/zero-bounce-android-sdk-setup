@@ -55,7 +55,7 @@ afterEvaluate {
                 pom {
                     name = PUBLISH_ARTIFACT_ID
                     description = 'The ZeroBounce SDK for Android'
-                    url = 'https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup'
+                    url = 'https://github.com/zerobounce/zero-bounce-android-sdk-setup'
                     licenses {
                         license {
                             name = 'The Apache Software License, Version 2.0'
@@ -71,9 +71,9 @@ afterEvaluate {
                     }
 
                     scm {
-                        connection = 'scm:git:github.com/zerobounce-llc/zero-bounce-android-sdk-setup.git'
-                        developerConnection = 'scm:git:ssh:/github.com/zerobounce-llc/zero-bounce-android-sdk-setup.git'
-                        url = 'https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/tree/main'
+                        connection = 'scm:git:github.com/zerobounce/zero-bounce-android-sdk-setup.git'
+                        developerConnection = 'scm:git:ssh:/github.com/zerobounce/zero-bounce-android-sdk-setup.git'
+                        url = 'https://github.com/zerobounce/zero-bounce-android-sdk-setup/tree/main'
                     }
                 }
             }

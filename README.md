@@ -1,6 +1,6 @@
 ## ZeroBounce Android SDK
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce-llc/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
 
 This SDK contains methods for interacting easily with ZeroBounce API.
 More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.3'
+implementation 'com.zerobounce.android:zerobouncesdk:1.1.4'
 ```
 
 ## USAGE
@@ -61,7 +61,7 @@ Then you can use any of the SDK methods, for example:
             // your implementation
         }
     )
-```
+    ```
 
 * ##### Check how many credits you have left on your account
     ```kotlin
@@ -328,6 +328,7 @@ Alternatively, you can only execute the first command, then then go to the [Nexu
 ## Exporting and importing PGP keys
 1. Export the keys:
     ```shell
+    gpg --list-keys  # In order to obtain the key hash for the next step
     gpg --export -a <LAST_8_DIGITS> > public.key
     gpg --export-secret-key -a <LAST_8_DIGITS> > private key
     ```
