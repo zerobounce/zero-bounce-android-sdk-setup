@@ -1,49 +1,47 @@
 ## ZeroBounce Android SDK
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
+El SDK de ZeroBounce para Android es una implementación en Java que permite interactuar fácilmente con la API de ZeroBounce. Este SDK está construido utilizando la versión Java 11.
 
-This SDK contains methods for interacting easily with ZeroBounce API.
-More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
-This SDK is built using the Java 11 version.
-
-### Installation
-You can install ZeroBounceSDK by adding the dependency to your gradle file:
+### Instalación
+Puedes instalar ZeroBounceSDK agregando la dependencia a tu archivo Gradle:
 
 ```gradle
 implementation 'com.zerobounce.android:zerobouncesdk:1.1.4'
 ```
 
-## USAGE
-Import the sdk in your file:
+### Uso
+Importa el SDK en tu archivo:
+
 ```kotlin
 import com.zerobounce.android.ZeroBounceSDK
 ```
 
-Initialize the sdk with your api key:
+Inicializa el SDK con tu clave de API:
+
 ```kotlin
-ZeroBounceSDK.initialize("<YOUR_API_KEY>")
+ZeroBounceSDK.initialize("<TU_CLAVE_DE_API>")
 ```
 
-## Examples
-Then you can use any of the SDK methods, for example:
+### Ejemplos
+Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos ejemplos:
 
-* ##### Validate an email address
+* ##### Validar una dirección de correo electrónico
     ```kotlin
     ZeroBounceSDK.validate(
-        "<EMAIL_TO_TEST>",
-        "<OPTIONAL_IP_ADDRESS>",
+        "<CORREO_A_VALIDAR>",
+        "<DIRECCIÓN_IP_OPCIONAL>",
         { rsp ->
             Log.d("MainActivity", "validate rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error ->
             Log.e("MainActivity", "validate error: $error")
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Validate batch a list of email addresses
+* ##### Validar una lista de direcciones de correo electrónico en lote
     ```kotlin
     val emailsData = listOf(
         ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
@@ -54,60 +52,62 @@ Then you can use any of the SDK methods, for example:
         emailsData,
         { rsp ->
             Log.d("MainActivity", "validateBatch rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error ->
             Log.e("MainActivity", "validateBatch error: $error")
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Check how many credits you have left on your account
+* ##### Verificar cuántos créditos te quedan en tu cuenta
     ```kotlin
     ZeroBounceSDK.getCredits(
         { rsp -> 
             Log.d("MainActivity", "getCredits rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "getCredits error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Check your API usage for a given period of time
+* ##### Verificar el uso de tu API en un período de tiempo determinado
     ```kotlin
-    // import java.time.LocalDate
-    val startDate = LocalDate.now()    // The start date of when you want to view API usage
-    val endDate = LocalDate.now()      // The end date of when you want to view API usage
+    // Importa java.time.LocalDate
+    val startDate = LocalDate.now()    // La fecha de inicio para ver el uso de la API
+    val endDate = LocalDate.now()      // La fecha de fin para ver el uso de la API
 
     ZeroBounceSDK.getApiUsage(
         startDate, 
         endDate,
         { rsp -> 
             Log.d("MainActivity", "getApiUsage rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "getApiUsage error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### The *sendFile* API allows user to send a file for bulk email validation
+* ##### El método *sendFile* permite enviar un archivo para validación masiva de correos electrónicos
     ```kotlin
-    // import java.io.File
-    val myFile = File("<FILE_PATH>")  // The csv or txt file
-    val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
-    val firstNameColumn = 4           // The column index of first name in the file
-    val lastNameColumn = 5            // The column index of last name in the file
-    val genderColumn = 6              // The column index of gender in the file
-    val ipAddressColumn = 7           // The column index of IP address in the file
-    val hasHeaderRow = true           // If this is `true` the first row is considered as table headers 
-    val returnUrl = "https://domain.com/called/after/processing/request"
+    // Importa java.io.File
+    val myFile = File("<RUTA_DEL_ARCHIVO>")  // El archivo en formato CSV o TXT
+    val emailAddressColumn = 3        // El índice de la columna de dirección de correo electrónico
+
+en el archivo (el índice comienza en 1)
+val firstNameColumn = 4           // El índice de la columna de nombre en el archivo
+val lastNameColumn = 5            // El índice de la columna de apellido en el archivo
+val genderColumn = 6              // El índice de la columna de género en el archivo
+val ipAddressColumn = 7           // El índice de la columna de dirección IP en el archivo
+val hasHeaderRow = true           // Si es `true`, se considera que la primera fila contiene los encabezados de la tabla
+val returnUrl = "https://domain.com/called/after/processing/request"
 
     ZeroBounceSDK.sendFile(
         context,
@@ -120,93 +120,95 @@ Then you can use any of the SDK methods, for example:
         hasHeaderRow,
         { rsp ->
             Log.d("MainActivity", "sendFile rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error ->
             Log.e("MainActivity", "sendFile error: $error")
-            // your implementation
+            // Tu implementación
         },
     )
     ```
 
-* ##### The *getFile* API allows users to get the validation results file for the file been submitted using *sendFile* API
+* ##### El método *getFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *sendFile*
     ```kotlin
-    val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
+    val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método sendFile
 
     ZeroBounceSDK.getFile(
         context, 
         fileId,
         { rsp -> 
-            Log.d("MainActivity", "getfile rsp: $rsp")
-            // your implementation
+            Log.d("MainActivity", "getFile rsp: $rsp")
+            // Tu implementación
         },
         { error -> 
-            Log.e("MainActivity", "getfile error: $error") 
-            // your implementation
+            Log.e("MainActivity", "getFile error: $error") 
+            // Tu implementación
         }
     )
     ```
 
-* ##### Check the status of a file uploaded via *sendFile* method
+* ##### Verificar el estado de un archivo cargado a través del método *sendFile*
     ```kotlin
-    val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
+    val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método sendFile
 
     ZeroBounceSDK.fileStatus(
         context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "fileStatus rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "fileStatus error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Delete the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
+* ##### Eliminar el archivo que se envió utilizando el método *sendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
     ```kotlin
-    val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
+    val fileId = "<ID_DEL_ARCHIVO>"   // El ID de archivo devuelto al llamar al método sendFile
 
     ZeroBounceSDK.deleteFile(
         context,
         fileId,
         { rsp -> 
             Log.d("MainActivity", "deleteFile rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "deleteFile error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Gather insights into your subscribers’ overall email engagement. The request returns data regarding opens, clicks, forwards and unsubscribes that have taken place in the past 30, 90, 180 or 365 days.
+* ##### Obtener información sobre la actividad de tus suscriptores en cuanto a aperturas, clics, reenvíos y cancelaciones de suscripción que hayan tenido lugar en los últimos 30, 90, 180 o 365 días.
     ```kotlin
     ZeroBounceSDK.getActivityData(
-        "<EMAIL_TO_TEST>",
+        "<CORREO_A_VALIDAR>",
         { rsp -> 
             Log.d("MainActivity", "validate rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "validate error: $error") 
-            // your implementation
-        }
-    )
-    ```
+            //
+
+Tu implementación
+}
+)
+```
 
 
-### AI Scoring API
+### API de puntuación de IA (AI Scoring)
 
-* ##### The *scoringSendFile* API allows user to send a file for bulk email validation
+* ##### El método *scoringSendFile* permite enviar un archivo para la validación masiva de correos electrónicos con puntuación de IA
     ```kotlin
-    // import java.io.File
-    val myFile = File("<FILE_PATH>")  // The csv or txt file
-    val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
-    val hasHeaderRow = true           // If this is `true` the first row is considered as table headers 
+    // Importa java.io.File
+    val myFile = File("<RUTA_DEL_ARCHIVO>")  // El archivo en formato CSV o TXT
+    val emailAddressColumn = 3        // El índice de la columna de dirección de correo electrónico (el índice comienza en 1)
+    val hasHeaderRow = true           // Si es `true`, se considera que la primera fila contiene los encabezados de la tabla
     val returnUrl = "https://domain.com/called/after/processing/request"
 
     ZeroBounceSDK.scoringSendFile(
@@ -217,128 +219,122 @@ Then you can use any of the SDK methods, for example:
         hasHeaderRow,
         { rsp ->
             Log.d("MainActivity", "scoringSendFile rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error ->
             Log.e("MainActivity", "scoringSendFile error: $error")
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### The *scoringGetFile* API allows users to get the validation results file for the file been submitted using *scoringSendFile* API
+* ##### El método *scoringGetFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *scoringSendFile*
     ```kotlin
-    val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
+    val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método scoringSendFile
 
     ZeroBounceSDK.scoringGetFile(
         context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "scoringGetFile rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "scoringGetFile error: $error")
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Check the status of a file uploaded via *scoringSendFile* method
+* ##### Verificar el estado de un archivo cargado a través del método *scoringSendFile*
     ```kotlin
-    val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
+    val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método scoringSendFile
 
     ZeroBounceSDK.scoringFileStatus(
         context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "scoringFileStatus rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "scoringFileStatus error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-* ##### Delete the file that was submitted using scoring *scoringSendFile* API. File can be deleted only when its status is `Complete`
+* ##### Eliminar el archivo que se envió utilizando el método *scoringSendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
     ```kotlin
-    val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendFile API
+    val fileId = "<ID_DEL_ARCHIVO>"   // El ID de archivo devuelto al llamar al método scoringSendFile
 
     ZeroBounceSDK.scoringDeleteFile(
         context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "scoringDeleteFile rsp: $rsp")
-            // your implementation
+            // Tu implementación
         },
         { error -> 
             Log.e("MainActivity", "scoringDeleteFile error: $error") 
-            // your implementation
+            // Tu implementación
         }
     )
     ```
 
-## Documentation
-The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk > Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html``` file.
+### Documentación
+La documentación del SDK se puede generar a través de una tarea de *Gradle*. Abre la pestaña *Gradle* (en la disposición predeterminada, debería estar en el lado derecho de Android Studio), luego ve a *zero_bounce_sdk > Tasks > documentation* y haz doble clic en la tarea ***dokkaHtml
 
+***. Una vez generada, puedes encontrarla en *zero_bounce_sdk/build/dokka/html*. Desde allí, solo tienes que abrir el archivo `index.html`.
 
-## Publication
-Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. Don't forget to update the version before doing a release!
-If you ever change the OSSRH login credentials, you'll need to also update the repository variables on Github.
+### Publicación
+Cada vez que se crea una nueva versión, el flujo de trabajo de CI/CD se ejecutará y se lanzará un nuevo artefacto en Maven Central. No olvides actualizar la versión antes de hacer un lanzamiento. Si alguna vez cambias las credenciales de inicio de sesión de OSSRH, también deberás actualizar las variables del repositorio en Github.
 
+### Configuración local para lanzamiento manual
+Para poder publicar en el repositorio Nexus desde tu máquina local, debes seguir estos pasos:
 
-### Local setup for manual release
-In order to be able to publish to the Nexus repository from you local machine, you'll need to do a few steps:
-1. Create a/Update the `local.properties` file, in the project root, like this:
-    ```gradle
-    ## This file must *NOT* be checked into Version Control Systems,
-    # as it contains information specific to your local configuration.
-    #
-    # Location of the SDK. This is only used by Gradle.
-    # For customization when using a Version Control System, please read the
-    # header note.
-    #Mon Mar 20 10:30:40 EET 2023
-    sdk.dir=<YOUR_ANDROID_SDK_DIR>
-    signing.keyId=<THE_LAST_8_DIGITS_OF_YOUR_GPG_KEY>
-    signing.password=<YOUR_GPG_PASSWORD>
-    signing.key=<YOUR_GPG_PRIVATE_KEY>  # newlines must be replaced with the newline character '\n'
-    ossrhUsername=<YOUR_SONATYPE_JIRA_USERNAME>
-    ossrhPassword=<YOUR_SONATYPE_JIRA_PASSWORD>
-    sonatypeStagingProfileId=<YOUR_SONATYPE_STAGING_PROFILE_ID>
-    ```
-2. Import the GPG key to your local machine (see below)
+1. Crea o actualiza el archivo `local.properties` en la raíz del proyecto con la siguiente información:
+   ```gradle
+   sdk.dir=<TU_DIRECTORIO_DEL_SDK_DE_ANDROID>
+   signing.keyId=<LOS_8_ÚLTIMOS_DÍGITOS_DE_TU_CLAVE_GPG>
+   signing.password=<TU_CONTRASEÑA_GPG>
+   signing.key=<TU_CLAVE_PRIVADA_GPG>  # las líneas nuevas deben reemplazarse con el carácter de nueva línea '\n'
+   ossrhUsername=<TU_NOMBRE_DE_USUARIO_DE_JIRA_DE_SONATYPE>
+   ossrhPassword=<TU_CONTRASEÑA_DE_JIRA_DE_SONATYPE>
+   sonatypeStagingProfileId=<TU_ID_DE_PERFIL_DE_ETAPA_DE_SONATYPE>
+   ```
+2. Importa la clave GPG a tu máquina local (ver más abajo)
 
+Si deseas publicar manualmente en el repositorio Nexus (y luego lanzarlo en Maven Central), puedes usar los siguientes comandos:
 
-If you want to manually publish to the Nexus repository (and then release it to Maven Central), you can use the following commands:
 ```shell
-# For publishing to the staging repository
+# Para publicar en el repositorio de etapas
 ./gradlew publishReleasePublicationToSonatypeRepository
 
-# For closing and releasing the artifact.
+# Para cerrar y lanzar el artefacto.
 ./gradlew closeAndReleaseSonatypeStagingRepository
 ```
 
-Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After **releasing** the artifact, it will take:
-- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.1)
-- 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
+Alternativamente, solo puedes ejecutar el primer comando y luego ir a [Nexus Sonatype](https://s01.oss.sonatype.org/), iniciar sesión y abrir *Staging Repositories* y hacer clic en *Refresh*. Aquí verás el artefacto que acabas de cargar. Para publicarlo, debes **cerrarlo** y luego **lanzarlo**. Estas acciones tardarán unos minutos en completarse. Después de **lanzar** el artefacto, tardará:
+- algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.1)
+- de 1 a 3 días en aparecer en el [Repositorio de MVN](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
+### Exportar e importar claves PGP
+1. Exporta las claves:
+   ```shell
+   gpg --list-keys  # Para obtener el hash de la clave para el siguiente paso
+   gpg --export -a <LOS_8_ÚLTIMOS_DÍGITOS> > public.key
+   gpg --export-secret-key -a <LOS_8_ÚLTIMOS_DÍGITOS> > private.key
+   ```
+2. Importa las claves:
+   ```shell
+   gpg --import public.key
+   gpg
 
-## Exporting and importing PGP keys
-1. Export the keys:
-    ```shell
-    gpg --list-keys  # In order to obtain the key hash for the next step
-    gpg --export -a <LAST_8_DIGITS> > public.key
-    gpg --export-secret-key -a <LAST_8_DIGITS> > private key
-    ```
-2. Import the keys:
-    ```shell
-    gpg --import public.key
-    gpg --import private.key
-    ```
-3. Check that the new keys are imported:
-    ```shell
-    gpg --list-keys
-    gpg --list-secret-keys
-    ```
+--import private.key
+   ```
+3. Verifica que las nuevas claves estén importadas:
+   ```shell
+   gpg --list-keys
+   gpg --list-secret-keys
+   ```
