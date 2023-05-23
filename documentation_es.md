@@ -1,15 +1,11 @@
-## ZeroBounce Android SDK
-
-El SDK de ZeroBounce para Android es una implementación en Java que permite interactuar fácilmente con la API de ZeroBounce. Este SDK está construido utilizando la versión Java 11.
-
-### Instalación
+##### Instalación
 Puedes instalar ZeroBounceSDK agregando la dependencia a tu archivo Gradle:
 
 ```gradle
 implementation 'com.zerobounce.android:zerobouncesdk:1.1.4'
 ```
 
-### Uso
+##### Uso
 Importa el SDK en tu archivo:
 
 ```kotlin
@@ -22,10 +18,10 @@ Inicializa el SDK con tu clave de API:
 ZeroBounceSDK.initialize("<TU_CLAVE_DE_API>")
 ```
 
-### Ejemplos
+##### Ejemplos
 Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos ejemplos:
 
-* ##### Validar una dirección de correo electrónico
+* ####### Validar una dirección de correo electrónico
     ```kotlin
     ZeroBounceSDK.validate(
         "<CORREO_A_VALIDAR>",
@@ -41,7 +37,7 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
     )
     ```
 
-* ##### Validar una lista de direcciones de correo electrónico en lote
+* ####### Validar una lista de direcciones de correo electrónico en lote
     ```kotlin
     val emailsData = listOf(
         ZBValidateBatchData(email = "valid@example.com", ip = "1.1.1.1"),
@@ -61,7 +57,7 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
     )
     ```
 
-* ##### Verificar cuántos créditos te quedan en tu cuenta
+* ####### Verificar cuántos créditos te quedan en tu cuenta
     ```kotlin
     ZeroBounceSDK.getCredits(
         { rsp -> 
@@ -75,7 +71,7 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
     )
     ```
 
-* ##### Verificar el uso de tu API en un período de tiempo determinado
+* ####### Verificar el uso de tu API en un período de tiempo determinado
     ```kotlin
     // Importa java.time.LocalDate
     val startDate = LocalDate.now()    // La fecha de inicio para ver el uso de la API
@@ -95,7 +91,7 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
     )
     ```
 
-* ##### El método *sendFile* permite enviar un archivo para validación masiva de correos electrónicos
+* ####### El método *sendFile* permite enviar un archivo para validación masiva de correos electrónicos
     ```kotlin
     // Importa java.io.File
     val myFile = File("<RUTA_DEL_ARCHIVO>")  // El archivo en formato CSV o TXT
@@ -129,7 +125,7 @@ val returnUrl = "https://domain.com/called/after/processing/request"
     )
     ```
 
-* ##### El método *getFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *sendFile*
+* ####### El método *getFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *sendFile*
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método sendFile
 
@@ -147,7 +143,7 @@ val returnUrl = "https://domain.com/called/after/processing/request"
     )
     ```
 
-* ##### Verificar el estado de un archivo cargado a través del método *sendFile*
+* ####### Verificar el estado de un archivo cargado a través del método *sendFile*
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método sendFile
 
@@ -165,7 +161,7 @@ val returnUrl = "https://domain.com/called/after/processing/request"
     )
     ```
 
-* ##### Eliminar el archivo que se envió utilizando el método *sendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
+* ####### Eliminar el archivo que se envió utilizando el método *sendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"   // El ID de archivo devuelto al llamar al método sendFile
 
@@ -183,7 +179,7 @@ val returnUrl = "https://domain.com/called/after/processing/request"
     )
     ```
 
-* ##### Obtener información sobre la actividad de tus suscriptores en cuanto a aperturas, clics, reenvíos y cancelaciones de suscripción que hayan tenido lugar en los últimos 30, 90, 180 o 365 días.
+* ####### Obtener información sobre la actividad de tus suscriptores en cuanto a aperturas, clics, reenvíos y cancelaciones de suscripción que hayan tenido lugar en los últimos 30, 90, 180 o 365 días.
     ```kotlin
     ZeroBounceSDK.getActivityData(
         "<CORREO_A_VALIDAR>",
@@ -201,9 +197,9 @@ Tu implementación
 ```
 
 
-### API de puntuación de IA (AI Scoring)
+##### API de puntuación de IA (AI Scoring)
 
-* ##### El método *scoringSendFile* permite enviar un archivo para la validación masiva de correos electrónicos con puntuación de IA
+* ####### El método *scoringSendFile* permite enviar un archivo para la validación masiva de correos electrónicos con puntuación de IA
     ```kotlin
     // Importa java.io.File
     val myFile = File("<RUTA_DEL_ARCHIVO>")  // El archivo en formato CSV o TXT
@@ -228,7 +224,7 @@ Tu implementación
     )
     ```
 
-* ##### El método *scoringGetFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *scoringSendFile*
+* ####### El método *scoringGetFile* permite obtener el archivo de resultados de validación del archivo enviado utilizando el método *scoringSendFile*
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método scoringSendFile
 
@@ -246,7 +242,7 @@ Tu implementación
     )
     ```
 
-* ##### Verificar el estado de un archivo cargado a través del método *scoringSendFile*
+* ####### Verificar el estado de un archivo cargado a través del método *scoringSendFile*
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"    // El ID de archivo devuelto al llamar al método scoringSendFile
 
@@ -264,7 +260,7 @@ Tu implementación
     )
     ```
 
-* ##### Eliminar el archivo que se envió utilizando el método *scoringSendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
+* ####### Eliminar el archivo que se envió utilizando el método *scoringSendFile*. El archivo solo se puede eliminar cuando su estado es `Completado`
     ```kotlin
     val fileId = "<ID_DEL_ARCHIVO>"   // El ID de archivo devuelto al llamar al método scoringSendFile
 
@@ -282,15 +278,15 @@ Tu implementación
     )
     ```
 
-### Documentación
+##### Documentación
 La documentación del SDK se puede generar a través de una tarea de *Gradle*. Abre la pestaña *Gradle* (en la disposición predeterminada, debería estar en el lado derecho de Android Studio), luego ve a *zero_bounce_sdk > Tasks > documentation* y haz doble clic en la tarea ***dokkaHtml
 
 ***. Una vez generada, puedes encontrarla en *zero_bounce_sdk/build/dokka/html*. Desde allí, solo tienes que abrir el archivo `index.html`.
 
-### Publicación
+##### Publicación
 Cada vez que se crea una nueva versión, el flujo de trabajo de CI/CD se ejecutará y se lanzará un nuevo artefacto en Maven Central. No olvides actualizar la versión antes de hacer un lanzamiento. Si alguna vez cambias las credenciales de inicio de sesión de OSSRH, también deberás actualizar las variables del repositorio en Github.
 
-### Configuración local para lanzamiento manual
+##### Configuración local para lanzamiento manual
 Para poder publicar en el repositorio Nexus desde tu máquina local, debes seguir estos pasos:
 
 1. Crea o actualiza el archivo `local.properties` en la raíz del proyecto con la siguiente información:
@@ -298,7 +294,7 @@ Para poder publicar en el repositorio Nexus desde tu máquina local, debes segui
    sdk.dir=<TU_DIRECTORIO_DEL_SDK_DE_ANDROID>
    signing.keyId=<LOS_8_ÚLTIMOS_DÍGITOS_DE_TU_CLAVE_GPG>
    signing.password=<TU_CONTRASEÑA_GPG>
-   signing.key=<TU_CLAVE_PRIVADA_GPG>  # las líneas nuevas deben reemplazarse con el carácter de nueva línea '\n'
+   signing.key=<TU_CLAVE_PRIVADA_GPG>  ### las líneas nuevas deben reemplazarse con el carácter de nueva línea '\n'
    ossrhUsername=<TU_NOMBRE_DE_USUARIO_DE_JIRA_DE_SONATYPE>
    ossrhPassword=<TU_CONTRASEÑA_DE_JIRA_DE_SONATYPE>
    sonatypeStagingProfileId=<TU_ID_DE_PERFIL_DE_ETAPA_DE_SONATYPE>
@@ -308,10 +304,10 @@ Para poder publicar en el repositorio Nexus desde tu máquina local, debes segui
 Si deseas publicar manualmente en el repositorio Nexus (y luego lanzarlo en Maven Central), puedes usar los siguientes comandos:
 
 ```shell
-# Para publicar en el repositorio de etapas
+### Para publicar en el repositorio de etapas
 ./gradlew publishReleasePublicationToSonatypeRepository
 
-# Para cerrar y lanzar el artefacto.
+### Para cerrar y lanzar el artefacto.
 ./gradlew closeAndReleaseSonatypeStagingRepository
 ```
 
@@ -319,10 +315,10 @@ Alternativamente, solo puedes ejecutar el primer comando y luego ir a [Nexus Son
 - algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.1)
 - de 1 a 3 días en aparecer en el [Repositorio de MVN](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
-### Exportar e importar claves PGP
+##### Exportar e importar claves PGP
 1. Exporta las claves:
    ```shell
-   gpg --list-keys  # Para obtener el hash de la clave para el siguiente paso
+   gpg --list-keys  ### Para obtener el hash de la clave para el siguiente paso
    gpg --export -a <LOS_8_ÚLTIMOS_DÍGITOS> > public.key
    gpg --export-secret-key -a <LOS_8_ÚLTIMOS_DÍGITOS> > private.key
    ```
