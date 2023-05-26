@@ -95,15 +95,13 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
     ```kotlin
     // Importa java.io.File
     val myFile = File("<RUTA_DEL_ARCHIVO>")  // El archivo en formato CSV o TXT
-    val emailAddressColumn = 3        // El índice de la columna de dirección de correo electrónico
-
-en el archivo (el índice comienza en 1)
-val firstNameColumn = 4           // El índice de la columna de nombre en el archivo
-val lastNameColumn = 5            // El índice de la columna de apellido en el archivo
-val genderColumn = 6              // El índice de la columna de género en el archivo
-val ipAddressColumn = 7           // El índice de la columna de dirección IP en el archivo
-val hasHeaderRow = true           // Si es `true`, se considera que la primera fila contiene los encabezados de la tabla
-val returnUrl = "https://domain.com/called/after/processing/request"
+    val emailAddressColumn = 3        // El índice de la columna de dirección de correo electrónico en el archivo (el índice comienza en 1)
+    val firstNameColumn = 4           // El índice de la columna de nombre en el archivo
+    val lastNameColumn = 5            // El índice de la columna de apellido en el archivo
+    val genderColumn = 6              // El índice de la columna de género en el archivo
+    val ipAddressColumn = 7           // El índice de la columna de dirección IP en el archivo
+    val hasHeaderRow = true           // Si es `true`, se considera que la primera fila contiene los encabezados de la tabla
+    val returnUrl = "https://domain.com/called/after/processing/request"
 
     ZeroBounceSDK.sendFile(
         context,
