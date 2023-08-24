@@ -1,16 +1,16 @@
-## ZeroBounce Android SDK
+## ZeroBounce India Android SDK
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg?branch=master)](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.in.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.in.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-india-android-sdk-setup/actions/workflows/publish.yml/badge.svg)](https://github.com/zerobounce/zero-bounce-india-android-sdk-setup/actions/workflows/publish.yml)
 
 This SDK contains methods for interacting easily with ZeroBounce API.
-More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
+More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.in/docs/). \
 This SDK is built using the Java 11 version.
 
 ### Installation
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.6'
+implementation 'com.zerobounce.in.android:zerobouncesdk:1.1.6'
 ```
 
 ## USAGE
