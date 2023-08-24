@@ -35,6 +35,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
 //                validateBatch()
 
+//                guessFormat("<EMAIL_TO_TEST>", "<DOMAIN_TO_TEST>")
+
                 getCredits()
 
 //                getApiUsage()
@@ -72,13 +74,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
      */
     fun validate(email: String) {
         ZeroBounceSDK.validate(
-            email,
-            null,
-            { rsp ->
+            email = email,
+            ipAddress = null,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "validate rsp: $rsp")
                 // your implementation
             },
-            { error ->
+            errorCallback = { error ->
                 Log.e("MainActivity", "validate error: $error")
                 // your implementation
             }
@@ -95,13 +97,28 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             ZBValidateBatchData(email = "disposable@example.com", ip = null)
         )
         ZeroBounceSDK.validateBatch(
-            emailsData,
-            { rsp ->
+            emails = emailsData,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "validateBatch rsp: $rsp")
                 // your implementation
             },
-            { error ->
+            errorCallback = { error ->
                 Log.e("MainActivity", "validateBatch error: $error")
+                // your implementation
+            }
+        )
+    }
+
+    fun guessFormat(email: String, domain: String) {
+        ZeroBounceSDK.guessFormat(
+            email = email,
+            domain = domain,
+            responseCallback = { rsp ->
+                Log.d("MainActivity", "guessFormat rsp: $rsp")
+                // your implementation
+            },
+            errorCallback = { error ->
+                Log.e("MainActivity", "guessFormat error: $error")
                 // your implementation
             }
         )
@@ -131,12 +148,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         startDate.time -= 5 * 24 * 60 * 60 * 1000 // previous 5 days
         val endDate = Date()
         ZeroBounceSDK.getApiUsage(
-            startDate,
-            endDate,
-            { rsp ->
+            startDate = startDate,
+            endDate = endDate,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "getApiUsage rsp: $rsp")
             },
-            { error ->
+            errorCallback = { error ->
                 Log.e("MainActivity", "getApiUsage error: $error")
             }
         )
@@ -176,10 +193,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
      */
     fun fileStatus(fileId: String) {
         ZeroBounceSDK.fileStatus(
-            fileId,
-            { rsp ->
+            fileId = fileId,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "fileStatus rsp: $rsp")
-            }, { error ->
+            }, errorCallback = { error ->
                 Log.e("MainActivity", "fileStatus error: $error")
             }
         )
@@ -192,11 +209,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
      */
     fun getFile(fileId: String) {
         ZeroBounceSDK.getFile(
-            applicationContext,
-            fileId,
-            { rsp ->
+            context = applicationContext,
+            fileId = fileId,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "getFile rsp: $rsp, localFilePath=${rsp.localFilePath}")
-            }, { error ->
+            }, errorCallback = { error ->
                 Log.e("MainActivity", "getFile error: $error")
             }
         )
@@ -209,10 +226,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
      */
     fun deleteZBFile(fileId: String) {
         ZeroBounceSDK.deleteFile(
-            fileId,
-            { response ->
+            fileId = fileId,
+            successCallback = { response ->
                 Log.d("MainActivity", "deleteZBFile success: $response")
-            }, { error ->
+            }, errorCallback = { error ->
                 Log.e("MainActivity", "deleteZBFile error: $error")
             }
         )
@@ -225,10 +242,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
      */
     fun getActivityData(email: String) {
         ZeroBounceSDK.getActivityData(
-            email,
-            { rsp ->
+            email = email,
+            responseCallback = { rsp ->
                 Log.d("MainActivity", "getActivityData rsp: $rsp")
-            }, { error ->
+            }, errorCallback = { error ->
                 Log.e("MainActivity", "getActivityData error: $error")
             }
         )

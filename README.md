@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.4'
+implementation 'com.zerobounce.android:zerobouncesdk:1.1.5'
 ```
 
 ## USAGE
@@ -58,6 +58,21 @@ Then you can use any of the SDK methods, for example:
         },
         { error ->
             Log.e("MainActivity", "validateBatch error: $error")
+            // your implementation
+        }
+    )
+    ```
+* ##### Guess the format of an email
+    ```kotlin
+    ZeroBounceSDK.guessFormat(
+        email = email,
+        domain = domain,
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "guessFormat rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "guessFormat error: $error")
             // your implementation
         }
     )

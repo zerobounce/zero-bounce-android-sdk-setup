@@ -18,7 +18,6 @@ import org.mockito.junit.MockitoJUnitRunner
 import java.io.File
 import java.util.*
 import java.util.concurrent.CountDownLatch
-import kotlin.collections.LinkedHashMap
 
 @RunWith(MockitoJUnitRunner::class)
 class ZeroBounceSDKTest {
@@ -329,6 +328,114 @@ class ZeroBounceSDKTest {
             val bodyJson = gson.fromJson(request.body.readUtf8(), LinkedHashMap::class.java)
             assertTrue("api_key" in bodyJson)
             assertEquals(API_KEY, bodyJson["api_key"])
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun guessFormat_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\n" +
+                "      \"email\": \"john.doe@example.com\",\n" +
+                "      \"domain\": \"example.com\",\n" +
+                "      \"format\": \"first.last\",\n" +
+                "      \"status\": \"valid\",\n" +
+                "      \"sub_status\": \"\",\n" +
+                "      \"confidence\": \"HIGH\",\n" +
+                "      \"did_you_mean\": \"\",\n" +
+                "      \"failure_reason\": \"\",\n" +
+                "      \"other_domain_formats\": [\n" +
+                "        {\n" +
+                "            \"format\": \"first_last\",\n" +
+                "            \"confidence\": \"HIGH\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "            \"format\": \"first\",\n" +
+                "            \"confidence\": \"MEDIUM\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }"
+        val expectedResponse = gson.fromJson(responseJson, ZBEmailFinderResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.guessFormat(
+            email = "flowerjill@aol.com",
+            domain = "aol.com",
+            responseCallback = { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the response from the server matches the expected response.
+        assertEquals(expectedResponse, actualResponse)
+
+        // Test that the actualResponse is an instance of the ZBEmailFinderResponse class
+        assertTrue(actualResponse is ZBEmailFinderResponse)
+        val temp = (actualResponse as ZBEmailFinderResponse).toJSON()
+        assertEquals(actualResponse, gson.fromJson(temp, ZBEmailFinderResponse::class.java))
+    }
+
+    @Test
+    fun guessFormat_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.guessFormat(
+            email = "flowerjill@aol.com",
+            domain = "aol.com",
+            responseCallback = { rsp ->
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
         }
 
         // Await for the response to be parsed

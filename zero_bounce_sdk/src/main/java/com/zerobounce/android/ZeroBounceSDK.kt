@@ -7,16 +7,22 @@ import android.util.Log
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import okhttp3.*
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 
 /**
@@ -102,6 +108,42 @@ object ZeroBounceSDK {
         request(
             url = "$apiBaseUrl/validatebatch",
             body = body,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Tries to guess the format of the given [email].
+     *
+     * @param email the email address you want to validate
+     * @param domain the email domain for which to find the email format
+     * @param firstName the first name of the person whose email format is being searched; optional
+     * @param middleName the middle name of the person whose email format is being searched;
+     * optional
+     * @param lastName the last name of the person whose email format is being searched; optional
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
+     */
+    fun guessFormat(
+        email: String,
+        domain: String,
+        firstName: String? = null,
+        middleName: String? = null,
+        lastName: String? = null,
+        responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&email=$email&domain=$domain"
+        firstName?.let { url += "&first_name=$firstName" }
+        middleName?.let { url += "&middle_name=$middleName" }
+        lastName?.let { url += "&last_name=$lastName" }
+
+        request(
+            url = url,
+            body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
         )
