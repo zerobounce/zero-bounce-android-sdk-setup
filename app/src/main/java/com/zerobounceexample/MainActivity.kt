@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
 //                validateBatch()
 
-//                guessFormat("<EMAIL_TO_TEST>", "<DOMAIN_TO_TEST>")
+//                guessFormat("<DOMAIN_TO_TEST>")
 
                 getCredits()
 
@@ -109,9 +109,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         )
     }
 
-    fun guessFormat(email: String, domain: String) {
+    /**
+     * Calls the *guessFormat* method of the [ZeroBounceSDK].
+     *
+     * @param domain the email domain for which to find the email format
+     */
+    fun guessFormat(domain: String) {
         ZeroBounceSDK.guessFormat(
-            email = email,
             domain = domain,
             responseCallback = { rsp ->
                 Log.d("MainActivity", "guessFormat rsp: $rsp")

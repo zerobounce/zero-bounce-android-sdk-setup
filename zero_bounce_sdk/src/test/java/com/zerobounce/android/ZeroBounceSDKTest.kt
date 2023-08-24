@@ -369,8 +369,7 @@ class ZeroBounceSDKTest {
 
         // Do the actual request
         ZeroBounceSDK.guessFormat(
-            email = "flowerjill@aol.com",
-            domain = "aol.com",
+            domain = "example.com",
             responseCallback = { rsp ->
                 actualResponse = rsp
                 countDownLatch.countDown()
@@ -417,8 +416,7 @@ class ZeroBounceSDKTest {
 
         // Do the actual request
         ZeroBounceSDK.guessFormat(
-            email = "flowerjill@aol.com",
-            domain = "aol.com",
+            domain = "example.com",
             responseCallback = { rsp ->
                 countDownLatch.countDown()
             },

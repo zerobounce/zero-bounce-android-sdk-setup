@@ -114,9 +114,8 @@ object ZeroBounceSDK {
     }
 
     /**
-     * Tries to guess the format of the given [email].
+     * Find the email and other domain formats based on a given [domain] name.
      *
-     * @param email the email address you want to validate
      * @param domain the email domain for which to find the email format
      * @param firstName the first name of the person whose email format is being searched; optional
      * @param middleName the middle name of the person whose email format is being searched;
@@ -126,7 +125,6 @@ object ZeroBounceSDK {
      * @param errorCallback the error callback
      */
     fun guessFormat(
-        email: String,
         domain: String,
         firstName: String? = null,
         middleName: String? = null,
@@ -136,7 +134,7 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
 
-        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&email=$email&domain=$domain"
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&domain=$domain"
         firstName?.let { url += "&first_name=$firstName" }
         middleName?.let { url += "&middle_name=$middleName" }
         lastName?.let { url += "&last_name=$lastName" }

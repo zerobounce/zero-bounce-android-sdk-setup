@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.5'
+implementation 'com.zerobounce.android:zerobouncesdk:1.1.6'
 ```
 
 ## USAGE
@@ -62,11 +62,11 @@ Then you can use any of the SDK methods, for example:
         }
     )
     ```
-* ##### Guess the format of an email
+
+* ##### Find the email and other domain formats based on a given domain name
     ```kotlin
     ZeroBounceSDK.guessFormat(
-        email = email,
-        domain = domain,
+        domain = "<DOMAIN_TO_TEST>",
         responseCallback = { rsp ->
             Log.d("MainActivity", "guessFormat rsp: $rsp")
             // your implementation
@@ -336,7 +336,7 @@ If you want to manually publish to the Nexus repository (and then release it to 
 ```
 
 Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After **releasing** the artifact, it will take:
-- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.1)
+- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.6)
 - 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
 
