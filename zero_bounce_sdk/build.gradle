@@ -73,6 +73,8 @@ dependencies {
     testImplementation 'org.powermock:powermock-module-junit4:2.0.2'
     testImplementation 'org.powermock:powermock-core:2.0.2'
     testImplementation 'org.powermock:powermock-api-mockito2:2.0.2'
+
+    dokkaJavadoc.dependsOn(':zero_bounce_sdk:generateReleaseRFile')
 }
 repositories {
     mavenCentral()
