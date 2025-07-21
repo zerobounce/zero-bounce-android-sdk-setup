@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.zerobounce.android.ZBException
 import com.zerobounce.android.ZBValidateBatchData
 import com.zerobounce.android.ZeroBounceSDK
 import java.io.File
@@ -170,24 +171,28 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         val file = File(getExternalFilesDir(null), "/email_file.csv")
         Log.d("MainActivity", "sendFile " + file.path + ", exists=" + file.exists())
 
-        ZeroBounceSDK.sendFile(
-            context = applicationContext,
-            file = file,
-            emailAddressColumnIndex = 1,
-            returnUrl = null,
-            firstNameColumnIndex = 2,
-            lastNameColumnIndex = 3,
-            genderColumnIndex = null,
-            ipAddressColumnIndex = null,
-            hasHeaderRow = true,
-            responseCallback = { rsp ->
-                Log.d("MainActivity", "sendFile rsp: $rsp")
-                rsp?.fileId?.let { fileStatus(it) }
-            },
-            errorCallback = { error ->
-                Log.e("MainActivity", "sendFile error: $error")
-            },
-        )
+        try {
+            ZeroBounceSDK.sendFile(
+                context = applicationContext,
+                file = file,
+                emailAddressColumnIndex = 1,
+                returnUrl = null,
+                firstNameColumnIndex = 2,
+                lastNameColumnIndex = 3,
+                genderColumnIndex = null,
+                ipAddressColumnIndex = null,
+                hasHeaderRow = true,
+                responseCallback = { rsp ->
+                    Log.d("MainActivity", "sendFile rsp: $rsp")
+                    rsp?.fileId?.let { fileStatus(it) }
+                },
+                errorCallback = { error ->
+                    Log.e("MainActivity", "sendFile error: $error")
+                },
+            )
+        } catch (e: ZBException) {
+            Log.e("MainActivity", "sendFile exception: $e")
+        }
     }
 
     /**

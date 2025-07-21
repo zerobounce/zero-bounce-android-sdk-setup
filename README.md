@@ -10,7 +10,7 @@ This SDK is built using the Java 11 version.
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.6'
+implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
 ```
 
 ## USAGE
@@ -319,8 +319,8 @@ In order to be able to publish to the Nexus repository from you local machine, y
     signing.keyId=<THE_LAST_8_DIGITS_OF_YOUR_GPG_KEY>
     signing.password=<YOUR_GPG_PASSWORD>
     signing.key=<YOUR_GPG_PRIVATE_KEY>  # newlines must be replaced with the newline character '\n'
-    ossrhUsername=<YOUR_SONATYPE_JIRA_USERNAME>
-    ossrhPassword=<YOUR_SONATYPE_JIRA_PASSWORD>
+    centralTokenUsername=<YOUR_SONATYPE_CENTRAL_TOKEN_USERNAME>
+    centralTokenPassword=<YOUR_SONATYPE_CENTRAL_TOKEN_PASSWORD>
     sonatypeStagingProfileId=<YOUR_SONATYPE_STAGING_PROFILE_ID>
     ```
 2. Import the GPG key to your local machine (see below)
@@ -336,7 +336,7 @@ If you want to manually publish to the Nexus repository (and then release it to 
 ```
 
 Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After **releasing** the artifact, it will take:
-- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.6)
+- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
 - 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
 

@@ -20,10 +20,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
     packagingOptions {
-        exclude 'META-INF/DEPENDENCIES'
+        resources {
+            excludes += ['META-INF/DEPENDENCIES']
+        }
     }
+
     namespace 'com.zerobounceexample'
 }
 
@@ -37,7 +39,7 @@ dependencies {
     // Replace the local import with the remote import if you want to use the latest version from
     // Maven Central
     implementation project(path: ':zero_bounce_sdk')
-//    implementation 'com.zerobounce.android:zerobouncesdk:1.1.6'
+//    implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

@@ -214,6 +214,7 @@ object ZeroBounceSDK {
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
+    @Throws(ZBException::class)
     fun sendFile(
         context: Context,
         file: File,
@@ -259,6 +260,7 @@ object ZeroBounceSDK {
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
+    @Throws(ZBException::class)
     fun scoringSendFile(
         context: Context,
         file: File,
@@ -301,6 +303,7 @@ object ZeroBounceSDK {
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
+    @Throws(ZBException::class)
     private fun sendFileInternal(
         context: Context,
         scoring: Boolean,
@@ -330,6 +333,10 @@ object ZeroBounceSDK {
             val errorResponse = ErrorResponse.parseError("File does not exist")
             errorCallback(errorResponse)
             return
+        }
+
+        if (emailAddressColumnIndex < 1) {
+            throw ZBException("Index for emailAddressColumnIndex must start from 1.")
         }
 
         val builder = MultipartBody.Builder()

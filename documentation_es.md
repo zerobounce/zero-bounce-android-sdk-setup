@@ -2,7 +2,7 @@
 Puedes instalar ZeroBounceSDK agregando la dependencia a tu archivo Gradle:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.1.6'
+implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
 ```
 
 ##### Uso
@@ -308,8 +308,8 @@ Para poder publicar en el repositorio Nexus desde tu máquina local, debes segui
    signing.keyId=<LOS_8_ÚLTIMOS_DÍGITOS_DE_TU_CLAVE_GPG>
    signing.password=<TU_CONTRASEÑA_GPG>
    signing.key=<TU_CLAVE_PRIVADA_GPG>  ### las líneas nuevas deben reemplazarse con el carácter de nueva línea '\n'
-   ossrhUsername=<TU_NOMBRE_DE_USUARIO_DE_JIRA_DE_SONATYPE>
-   ossrhPassword=<TU_CONTRASEÑA_DE_JIRA_DE_SONATYPE>
+   centralTokenUsername=<TU_NOMBRE_DE_USUARIO_DE_TOKEN_CENTRAL_SONATYPE>
+   centralTokenPassword=<TU_CONTRASEÑA_DE_TOKEN_CENTRAL_SONATYPE>
    sonatypeStagingProfileId=<TU_ID_DE_PERFIL_DE_ETAPA_DE_SONATYPE>
    ```
 2. Importa la clave GPG a tu máquina local (ver más abajo)
@@ -325,7 +325,7 @@ Si deseas publicar manualmente en el repositorio Nexus (y luego lanzarlo en Mave
 ```
 
 Alternativamente, solo puedes ejecutar el primer comando y luego ir a [Nexus Sonatype](https://s01.oss.sonatype.org/), iniciar sesión y abrir *Staging Repositories* y hacer clic en *Refresh*. Aquí verás el artefacto que acabas de cargar. Para publicarlo, debes **cerrarlo** y luego **lanzarlo**. Estas acciones tardarán unos minutos en completarse. Después de **lanzar** el artefacto, tardará:
-- algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.1.6)
+- algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
 - de 1 a 3 días en aparecer en el [Repositorio de MVN](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
 ##### Exportar e importar claves PGP
