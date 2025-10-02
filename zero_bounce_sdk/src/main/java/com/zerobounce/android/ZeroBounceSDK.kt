@@ -7,6 +7,7 @@ import android.util.Log
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.zerobounce.android.ZeroBounceSDK.apiKey
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -138,6 +139,72 @@ object ZeroBounceSDK {
         firstName?.let { url += "&first_name=$firstName" }
         middleName?.let { url += "&middle_name=$middleName" }
         lastName?.let { url += "&last_name=$lastName" }
+
+        request(
+            url = url,
+            body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Find the email based on a given [domain] name and [companyName].
+     *
+     */
+    fun findEmail(
+        domain: String? = null,
+        companyName: String? = null,
+        firstName: String? = null,
+        middleName: String? = null,
+        lastName: String? = null,
+        responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        // Validate that at least one of companyName or domain is provided
+        if (companyName.isNullOrBlank() && domain.isNullOrBlank()) {
+            errorCallback(
+                ErrorResponse.parseError("Either companyName or domain must be provided.")
+            )
+            return
+        }
+
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&domain=$domain&company_name=$companyName"
+        firstName?.let { url += "&first_name=$firstName" }
+        middleName?.let { url += "&middle_name=$middleName" }
+        lastName?.let { url += "&last_name=$lastName" }
+
+        request(
+            url = url,
+            body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Find other domain formats based on a given [domain] name and [companyName].
+     *
+     */
+    fun domainSearch(
+        domain: String? = null,
+        companyName: String? = null,
+        responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        // Validate that at least one of companyName or domain is provided
+        if (companyName.isNullOrBlank() && domain.isNullOrBlank()) {
+            errorCallback(
+                ErrorResponse.parseError("Either companyName or domain must be provided.")
+            )
+            return
+        }
+
+        val url = "$apiBaseUrl/guessformat?api_key=$apiKey&domain=$domain&company_name=$companyName"
 
         request(
             url = url,

@@ -9,16 +9,17 @@ data class ZBEmailFinderResponse(
 
     var email: String,
 
+    @SerializedName("email_confidence")
+    var emailConfidence: String,
+
     var domain: String,
 
-    var format: String,
+    @SerializedName("company_name")
+    var companyName: String? = null,
 
-    var status: String,
+    var format: String? = null,
 
-    @SerializedName("sub_status")
-    var subStatus: String,
-
-    var confidence: String,
+    var confidence: String? = null,
 
     @SerializedName("did_you_mean")
     var didYouMean: String,
