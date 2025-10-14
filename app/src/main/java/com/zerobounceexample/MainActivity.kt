@@ -11,7 +11,7 @@ import com.zerobounce.android.ZBException
 import com.zerobounce.android.ZBValidateBatchData
 import com.zerobounce.android.ZeroBounceSDK
 import java.io.File
-import java.util.*
+import java.util.Date
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
 
@@ -20,7 +20,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_main)
         setSupportActionBar(findViewById(R.id.toolbar))
 
-        ZeroBounceSDK.initialize("<YOUR_API_KEY>")
+        ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>")
 
         if (shouldAskPermissions()) {
             askPermissions()
@@ -51,6 +51,17 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 //                deleteZBFile("<YOUR_FILE_ID>")
 
 //                getActivityData("<EMAIL_TO_TEST>")
+
+//                findEmail(firstName = "<FIRST_NAME_TO_TEST>", domain = "<DOMAIN_TO_TEST>")
+
+/*                findEmail(
+                    firstName = "<FIRST_NAME_TO_TEST>",
+                    companyName = "<COMPANY_NAME_TO_TEST>"
+                )*/
+
+//                findDomain(domain = "<DOMAIN_TO_TEST>")
+
+//                findDomain(companyName = "COMPANY_NAME_TO_TEST")
             }
         }
     }
@@ -256,6 +267,50 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 Log.d("MainActivity", "getActivityData rsp: $rsp")
             }, errorCallback = { error ->
                 Log.e("MainActivity", "getActivityData error: $error")
+            }
+        )
+    }
+
+    /**
+     * Calls the *findEmail* method of the [ZeroBounceSDK].
+     *
+     * @param firstName The first name of the person whose email format is being searched.
+     * @param domain the email domain for which to find the email format
+     * @param companyName The company name for which to find the email format.
+     */
+    fun findEmail(firstName: String, domain: String? = null, companyName: String? = null) {
+        ZeroBounceSDK.findEmail(
+            firstName = firstName,
+            domain = domain,
+            companyName = companyName,
+            responseCallback = { rsp ->
+                Log.d("MainActivity", "findEmail rsp: $rsp")
+                // your implementation
+            },
+            errorCallback = { error ->
+                Log.e("MainActivity", "findEmail error: $error")
+                // your implementation
+            }
+        )
+    }
+
+    /**
+     * Calls the *findEmail* method of the [ZeroBounceSDK].
+     *
+     * @param domain the email domain for which to find the email format
+     * @param companyName The company name for which to find the email format.
+     */
+    fun findDomain(domain: String? = null, companyName: String? = null) {
+        ZeroBounceSDK.findDomain(
+            domain = domain,
+            companyName = companyName,
+            responseCallback = { rsp ->
+                Log.d("MainActivity", "findDomain rsp: $rsp")
+                // your implementation
+            },
+            errorCallback = { error ->
+                Log.e("MainActivity", "findDomain error: $error")
+                // your implementation
             }
         )
     }
