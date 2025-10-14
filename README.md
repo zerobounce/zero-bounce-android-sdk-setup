@@ -3,10 +3,12 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk/badge.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg)](https://github.com/zerobounce/zero-bounce-india-android-sdk-setup/actions/workflows/publish.yml)
 
 This SDK contains methods for interacting easily with ZeroBounce API.
-More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
+More information about ZeroBounce you can find in
+the [official documentation](https://www.zerobounce.net/docs/). \
 This SDK is built using the Java 11 version.
 
 ### Installation
+
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
 
 ```gradle
@@ -14,17 +16,21 @@ implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
 ```
 
 ## USAGE
+
 Import the sdk in your file:
+
 ```kotlin
 import com.zerobounce.android.ZeroBounceSDK
 ```
 
 Initialize the sdk with your api key:
+
 ```kotlin
 ZeroBounceSDK.initialize("<YOUR_API_KEY>")
 ```
 
 ## Examples
+
 Then you can use any of the SDK methods, for example:
 
 * ##### Validate an email address
@@ -144,7 +150,9 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### The *getFile* API allows users to get the validation results file for the file been submitted using *sendFile* API
+* ##### The
+  *getFile* API allows users to get the validation results file for the file been submitted using
+  *sendFile* API
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
@@ -180,7 +188,8 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### Delete the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
+* ##### Delete the file that was submitted using
+  *sendFile* API. File can be deleted only when its status is `Complete`
     ```kotlin
     val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
 
@@ -213,7 +222,6 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-
 ### AI Scoring API
 
 * ##### The *scoringSendFile* API allows user to send a file for bulk email validation
@@ -241,7 +249,9 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### The *scoringGetFile* API allows users to get the validation results file for the file been submitted using *scoringSendFile* API
+* ##### The
+  *scoringGetFile* API allows users to get the validation results file for the file been submitted using
+  *scoringSendFile* API
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
 
@@ -277,7 +287,8 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### Delete the file that was submitted using scoring *scoringSendFile* API. File can be deleted only when its status is `Complete`
+* ##### Delete the file that was submitted using scoring
+  *scoringSendFile* API. File can be deleted only when its status is `Complete`
     ```kotlin
     val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendFile API
 
@@ -295,17 +306,88 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-## Documentation
-The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk > Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html``` file.
+* ##### Find the email formats based on a given firstName and domain name
+    ```kotlin
+    ZeroBounceSDK.findEmail(
+        firstName = "<FIRST_NAME_TO_TEST>",
+        domain = "<DOMAIN_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findEmail rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findEmail error: $error")
+            // your implementation
+        }
+    )
+    ```
 
+* ##### Find the email formats based on a given firstName and company Name
+    ```kotlin
+    ZeroBounceSDK.findEmail(
+        firstName = "<FIRST_NAME_TO_TEST>",
+        companyName = "<COMPANY_NAME_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findEmail rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findEmail error: $error")
+            // your implementation
+        }
+    )
+    ```
+
+* ##### Find other domain formats based on a given domain
+    ```kotlin
+    ZeroBounceSDK.findDomain(
+        domain = "<DOMAIN_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findDomain rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findDomain error: $error")
+            // your implementation
+        }
+    )
+    ```
+* ##### Find other domain formats based on a given company name
+   ```kotlin
+   ZeroBounceSDK.findDomain(
+       companyName = "COMPANY_NAME_TO_TEST",
+       responseCallback = { rsp ->
+           Log.d("MainActivity", "findDomain rsp: $rsp")
+           // your implementation
+       },
+       errorCallback = { error ->
+           Log.e("MainActivity", "findDomain error: $error")
+           // your implementation
+       }
+   )
+   ``` 
+
+
+## Documentation
+
+The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the
+default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk >
+Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can
+find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html```
+file.
 
 ## Publication
-Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. Don't forget to update the version before doing a release!
-If you ever change the OSSRH login credentials, you'll need to also update the repository variables on Github.
 
+Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be
+released on Maven Central. Don't forget to update the version before doing a release!
+If you ever change the OSSRH login credentials, you'll need to also update the repository variables
+on Github.
 
 ### Local setup for manual release
-In order to be able to publish to the Nexus repository from you local machine, you'll need to do a few steps:
+
+In order to be able to publish to the Nexus repository from you local machine, you'll need to do a
+few steps:
+
 1. Create a/Update the `local.properties` file, in the project root, like this:
     ```gradle
     ## This file must *NOT* be checked into Version Control Systems,
@@ -325,8 +407,9 @@ In order to be able to publish to the Nexus repository from you local machine, y
     ```
 2. Import the GPG key to your local machine (see below)
 
+If you want to manually publish to the Nexus repository (and then release it to Maven Central), you
+can use the following commands:
 
-If you want to manually publish to the Nexus repository (and then release it to Maven Central), you can use the following commands:
 ```shell
 # For publishing to the staging repository
 ./gradlew publishReleasePublicationToSonatypeRepository
@@ -335,12 +418,21 @@ If you want to manually publish to the Nexus repository (and then release it to 
 ./gradlew closeAndReleaseSonatypeStagingRepository
 ```
 
-Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After **releasing** the artifact, it will take:
-- a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
-- 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
+Alternatively, you can only execute the first command, then then go to
+the [Nexus Sonatype](https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and
+click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have
+to **close** it and then **release** it. These actions will take a few minutes to complete. After *
+*releasing** the artifact, it will take:
 
+- a few hours before you can see it on
+  the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and
+  on
+  the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
+- 1-3 days before you can see it on
+  the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
 ## Exporting and importing PGP keys
+
 1. Export the keys:
     ```shell
     gpg --list-keys  # In order to obtain the key hash for the next step
@@ -357,3 +449,115 @@ Alternatively, you can only execute the first command, then then go to the [Nexu
     gpg --list-keys
     gpg --list-secret-keys
     ```
+## Breaking Changes:
+
+**`guessFormat`** has been deprecated. To continue using your existing code, you must migrate to 
+**`findEmail`** or **`findDomain`** .
+
+The change is not a simple one-to-one replacement, as the functionality has been split:
+
+* **If you were finding a person's email format**, use the new **`findEmail()`** method.
+* **If you were only determining the domain's general email pattern**, use the new
+* **`findDomain()`** method.
+
+### Migration Example:
+
+* #####  Old (Deprecated)
+
+    ```kotlin
+    ZeroBounceSDK.guessFormat(
+        domain = "<DOMAIN_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "guessFormat rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "guessFormat error: $error")
+            // your implementation
+        }
+    )
+    ```
+
+* ##### Find the email formats based on a given firstName and company Name
+    ```kotlin
+    ZeroBounceSDK.findEmail(
+        firstName = "<FIRST_NAME_TO_TEST>",
+        companyName = "<COMPANY_NAME_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findEmail rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findEmail error: $error")
+            // your implementation
+        }
+    )
+    ```
+
+* ##### Find the email formats based on a given firstName and company Name
+    ```kotlin
+    ZeroBounceSDK.findEmail(
+        firstName = "<FIRST_NAME_TO_TEST>",
+        companyName = "<COMPANY_NAME_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findEmail rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findEmail error: $error")
+            // your implementation
+        }
+    )
+    ```
+
+* ##### Find other domain formats based on a given domain
+    ```kotlin
+    ZeroBounceSDK.findDomain(
+        domain = "<DOMAIN_TO_TEST>",
+        responseCallback = { rsp ->
+            Log.d("MainActivity", "findDomain rsp: $rsp")
+            // your implementation
+        },
+        errorCallback = { error ->
+            Log.e("MainActivity", "findDomain error: $error")
+            // your implementation
+        }
+    )
+    ```
+* ##### Find other domain formats based on a given company name
+   ```kotlin
+   ZeroBounceSDK.findDomain(
+       companyName = "COMPANY_NAME_TO_TEST",
+       responseCallback = { rsp ->
+           Log.d("MainActivity", "findDomain rsp: $rsp")
+           // your implementation
+       },
+       errorCallback = { error ->
+           Log.e("MainActivity", "findDomain error: $error")
+           // your implementation
+       }
+   )
+   ```
+
+## New Features and Enhancements
+
+### Custom API URL Support
+
+The `ZeroBounceSDK.initialize()` method now accepts an **optional** `apiBaseUrl` parameter.
+This allows you to specify a custom base URL for the ZeroBounce API.
+
+#### Migration / Usage
+
+The existing way of initializing the SDK is still valid.
+
+Default Usage (No Change Required):
+If you don't provide a URL, the SDK will continue to use the standard ZeroBounce API endpoint.
+
+```kotlin
+ZeroBounceSDK.initialize("<YOUR_API_KEY>")
+```
+Initialize the sdk with your api key and URL:
+
+```kotlin
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = "<YOUR_URL>")
+```

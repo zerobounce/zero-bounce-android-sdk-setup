@@ -20,6 +20,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_main)
         setSupportActionBar(findViewById(R.id.toolbar))
 
+        //val apiUsaUrl = "https://api-us.zerobounce.net/v2/"
+        //val apiEuUrl = "https://api-eu.zerobounce.net/v2/"
+
         ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>")
 
         if (shouldAskPermissions()) {

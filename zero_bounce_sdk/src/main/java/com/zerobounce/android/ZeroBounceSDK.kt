@@ -194,7 +194,7 @@ object ZeroBounceSDK {
     }
 
     /**
-     * Find other domain formats based on a given [domain] name or [companyName].
+     * Find other domain formats based on a given [domain] or [companyName].
      *
      */
     fun findDomain(
