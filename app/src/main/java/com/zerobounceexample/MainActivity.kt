@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.zerobounce.android.ZBConstants
 import com.zerobounce.android.ZBException
 import com.zerobounce.android.ZBValidateBatchData
 import com.zerobounce.android.ZeroBounceSDK
@@ -20,8 +21,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_main)
         setSupportActionBar(findViewById(R.id.toolbar))
 
-        //val apiUsaUrl = "https://api-us.zerobounce.net/v2/"
-        //val apiEuUrl = "https://api-eu.zerobounce.net/v2/"
+        //val apiUsaUrl = ZBConstants.API_USA_URL
+        //val apiEuUrl = ZBConstants.API_EU_URL
 
         ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>")
 

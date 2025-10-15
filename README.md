@@ -250,7 +250,8 @@ Then you can use any of the SDK methods, for example:
     ```
 
 * ##### The
-  *scoringGetFile* API allows users to get the validation results file for the file been submitted using
+  *scoringGetFile* API allows users to get the validation results file for the file been submitted
+  using
   *scoringSendFile* API
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
@@ -367,7 +368,6 @@ Then you can use any of the SDK methods, for example:
    )
    ``` 
 
-
 ## Documentation
 
 The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the
@@ -449,9 +449,10 @@ to **close** it and then **release** it. These actions will take a few minutes t
     gpg --list-keys
     gpg --list-secret-keys
     ```
+
 ## Breaking Changes:
 
-**`guessFormat`** has been deprecated. To continue using your existing code, you must migrate to 
+**`guessFormat`** has been deprecated. To continue using your existing code, you must migrate to
 **`findEmail`** or **`findDomain`** .
 
 The change is not a simple one-to-one replacement, as the functionality has been split:
@@ -462,7 +463,7 @@ The change is not a simple one-to-one replacement, as the functionality has been
 
 ### Migration Example:
 
-* #####  Old (Deprecated)
+* ##### Old (Deprecated)
 
     ```kotlin
     ZeroBounceSDK.guessFormat(
@@ -477,6 +478,8 @@ The change is not a simple one-to-one replacement, as the functionality has been
         }
     )
     ```
+
+## New Methods
 
 * ##### Find the email formats based on a given firstName and company Name
     ```kotlin
@@ -556,8 +559,32 @@ If you don't provide a URL, the SDK will continue to use the standard ZeroBounce
 ```kotlin
 ZeroBounceSDK.initialize("<YOUR_API_KEY>")
 ```
+
 Initialize the sdk with your api key and URL:
 
 ```kotlin
 ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = "<YOUR_URL>")
+```
+
+The SDK now exposes a set of predefined constants for different geographical API endpoints,
+allowing for more precise network routing.
+
+### Available API Endpoints
+
+You can specify a custom API base URL during initialization by using the new optional `apiBaseUrl`
+parameter in `initialize()`. For convenience, the following constants are available in the
+**`ZBConstants`** class:
+
+| Constant              | URL Value                                   | Description                                                          |
+|:----------------------|:--------------------------------------------|:---------------------------------------------------------------------|
+| **`API_DEFAULT_URL`** | `https://api.zerobounce.net/v2/validate`    | The global default endpoint.                                         |
+| **`API_USA_URL`**     | `https://api-us.zerobounce.net/v2/validate` | The US-specific endpoint for lower latency in the Americas.          |
+| **`API_EU_URL`**      | `https://api-eu.zerobounce.net/v2/validate` | The EU-specific endpoint for compliance and lower latency in Europe. |
+
+### Usage Example:
+
+To use the EU endpoint for initialization:
+
+```kotlin
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API_EU_URL)
 ```
