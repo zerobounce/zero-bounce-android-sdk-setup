@@ -9,7 +9,6 @@ class ZBFindDomainResponse(
 
     var email: String,
 
-
     var domain: String,
 
     @SerializedName("company_name")
