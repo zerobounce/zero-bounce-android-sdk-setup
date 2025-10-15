@@ -166,7 +166,7 @@ object ZeroBounceSDK {
         companyName: String? = null,
         middleName: String? = null,
         lastName: String? = null,
-        responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
+        responseCallback: (response: ZBFindEmailResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
@@ -200,7 +200,7 @@ object ZeroBounceSDK {
     fun findDomain(
         domain: String? = null,
         companyName: String? = null,
-        responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
+        responseCallback: (response: ZBFindDomainResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return

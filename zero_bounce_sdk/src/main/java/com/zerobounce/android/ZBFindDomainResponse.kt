@@ -3,20 +3,19 @@ package com.zerobounce.android
 import com.google.gson.annotations.SerializedName
 
 /**
- * The model class used for the GET /guessformat request.
+ * The model class used for the GET /guessformat request for find domain.
  */
-data class ZBEmailFinderResponse(
+class ZBFindDomainResponse(
 
     var email: String,
 
+
     var domain: String,
 
+    @SerializedName("company_name")
+    var companyName: String,
+
     var format: String,
-
-    var status: String,
-
-    @SerializedName("sub_status")
-    var subStatus: String,
 
     var confidence: String,
 
