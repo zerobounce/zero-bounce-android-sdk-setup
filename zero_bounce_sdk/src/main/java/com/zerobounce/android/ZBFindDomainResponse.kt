@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName
 /**
  * The model class used for the GET /guessformat request for find domain.
  */
-class ZBFindDomainResponse(
+data class ZBFindDomainResponse(
 
     var email: String,
 

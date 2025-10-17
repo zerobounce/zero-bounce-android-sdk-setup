@@ -8,15 +8,17 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito.*
+import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
 import java.io.File
-import java.util.*
+import java.util.Date
 import java.util.concurrent.CountDownLatch
 
 @RunWith(MockitoJUnitRunner::class)
@@ -456,10 +458,10 @@ class ZeroBounceSDKTest {
         val responseJson = "{\n" +
                 "      \"email\": \"john.doe@example.com\",\n" +
                 "      \"domain\": \"example.com\",\n" +
-                "      \"email_confidence\": \"heigh\",\n" +
+                "      \"email_confidence\": \"high\",\n" +
                 "      \"company_name\": \"X company\",\n" +
                 "      \"did_you_mean\": \"\",\n" +
-                "      \"failure_reason\": \"\",\n" +
+                "      \"failure_reason\": \"\"\n" +
                 "    }"
         val expectedResponse = gson.fromJson(responseJson, ZBFindEmailResponse::class.java)
         server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
@@ -552,8 +554,8 @@ class ZeroBounceSDKTest {
         val responseJson = "{\n" +
                 "      \"email\": \"john.doe@example.com\",\n" +
                 "      \"domain\": \"example.com\",\n" +
-                "      \"format\": \"first.last\",\n" +
                 "      \"company_name\": \"X company\",\n" +
+                "      \"format\": \"first.last\",\n" +
                 "      \"confidence\": \"HIGH\",\n" +
                 "      \"did_you_mean\": \"\",\n" +
                 "      \"failure_reason\": \"\",\n" +
