@@ -6,11 +6,11 @@ plugins {
 android {
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.zerobounceexample"
+        applicationId "com.zerobounceexample"
         minSdk 21
         targetSdk 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode 1
+        versionName "1.0"
         multiDexEnabled true
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }

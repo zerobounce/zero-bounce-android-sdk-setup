@@ -21,9 +21,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_main)
         setSupportActionBar(findViewById(R.id.toolbar))
 
-        //val apiUsaUrl = ZBConstants.API_USA_URL
-        //val apiEuUrl = ZBConstants.API_EU_URL
-
         ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>")
 
         if (shouldAskPermissions()) {
@@ -278,9 +275,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     /**
      * Calls the *findEmail* method of the [ZeroBounceSDK].
      *
-     * @param firstName The first name of the person whose email format is being searched.
+     * @param firstName the first name of the person whose email format is being searched
      * @param domain the email domain for which to find the email format
-     * @param companyName The company name for which to find the email format.
+     * @param companyName the company name for which to find the email format
      */
     fun findEmail(firstName: String, domain: String? = null, companyName: String? = null) {
         ZeroBounceSDK.findEmail(
@@ -299,10 +296,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     /**
-     * Calls the *findEmail* method of the [ZeroBounceSDK].
+     * Calls the *findDomain* method of the [ZeroBounceSDK].
      *
      * @param domain the email domain for which to find the email format
-     * @param companyName The company name for which to find the email format.
+     * @param companyName the company name for which to find the email format
      */
     fun findDomain(domain: String? = null, companyName: String? = null) {
         ZeroBounceSDK.findDomain(

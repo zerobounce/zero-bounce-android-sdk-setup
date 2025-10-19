@@ -49,9 +49,6 @@ class ZeroBounceSDKTest {
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()
         ZeroBounceSDK.initialize(API_KEY, apiBaseUrl = server.url("/").toString())
-        // For testing the initialize method without the optional parameter.
-        //ZeroBounceSDK.apiBaseUrl = server.url("/").toString()
-        //ZeroBounceSDK.initialize(API_KEY)
     }
 
     @Test

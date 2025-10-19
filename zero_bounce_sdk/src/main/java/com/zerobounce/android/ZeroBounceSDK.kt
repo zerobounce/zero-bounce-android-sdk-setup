@@ -157,8 +157,18 @@ object ZeroBounceSDK {
     }
 
     /**
-     * Find the email based on a given [firstName], [domain] or [companyName].
+     * Finds the email based on a given [firstName], [domain] or [companyName].
      *
+     * **Note**: At least one of [domain] or [companyName] must be provided.
+     *
+     * @param firstName the first name of the person whose email format is being searched
+     * @param domain the email domain for which to find the email format
+     * @param companyName the company name for which to find the email format
+     * @param middleName the middle name of the person whose email format is being searched;
+     * optional
+     * @param lastName the last name of the person whose email format is being searched; optional
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
      */
     fun findEmail(
         firstName: String,
@@ -196,6 +206,12 @@ object ZeroBounceSDK {
     /**
      * Find other domain formats based on a given [domain] or [companyName].
      *
+     * **Note**: At least one of [domain] or [companyName] must be provided.
+     *
+     * @param domain the email domain for which to find the email format
+     * @param companyName the company name for which to find the email format
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
      */
     fun findDomain(
         domain: String? = null,
