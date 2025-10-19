@@ -517,9 +517,9 @@ parameter in `initialize()`. For convenience, the following constants are availa
 **`ZBConstants`** class:
 | Constant              | URL Value                                   | Description                                                          |
 |:----------------------|:--------------------------------------------|:---------------------------------------------------------------------|
-| **`API_DEFAULT_URL`** | `https://api.zerobounce.net/v2/validate`    | The global default endpoint.                                         |
-| **`API_USA_URL`**     | `https://api-us.zerobounce.net/v2/validate` | The US-specific endpoint for lower latency in the Americas.          |
-| **`API_EU_URL`**      | `https://api-eu.zerobounce.net/v2/validate` | The EU-specific endpoint for compliance and lower latency in Europe. |
+| **`API_DEFAULT_URL`** | `https://api.zerobounce.net/v2/`    | The global default endpoint.                                         |
+| **`API_USA_URL`**     | `https://api-us.zerobounce.net/v2/` | The US-specific endpoint for lower latency in the Americas.          |
+| **`API_EU_URL`**      | `https://api-eu.zerobounce.net/v2/` | The EU-specific endpoint for compliance and lower latency in Europe. |
 ### Usage Example:
 To use the EU endpoint for initialization:
 ```kotlin

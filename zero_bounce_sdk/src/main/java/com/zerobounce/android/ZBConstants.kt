@@ -6,7 +6,7 @@ package com.zerobounce.android
  */
 object ZBConstants {
 
-    const val API_DEFAULT_URL = "https://api.zerobounce.net/v2/validate"
-    const val API_USA_URL = "https://api-us.zerobounce.net/v2/validate"
-    const val API_EU_URL = "https://api-eu.zerobounce.net/v2/validate"
+    const val API_DEFAULT_URL = "https://api.zerobounce.net/v2/"
+    const val API_USA_URL = "https://api-us.zerobounce.net/v2/"
+    const val API_EU_URL = "https://api-eu.zerobounce.net/v2/"
 }
