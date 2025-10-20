@@ -310,7 +310,7 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### ##### Find the email formats based on a given first name and company name
+* ##### Find the email formats based on a given first name and company name
     ```kotlin
     ZeroBounceSDK.findEmail(
         firstName = "<FIRST_NAME_TO_TEST>",
@@ -394,7 +394,7 @@ If you want to manually publish to the Nexus repository (and then release it to 
 ./gradlew closeAndReleaseSonatypeStagingRepository
 ```
 
-Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype (https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After * *releasing** the artifact, it will take:
+Alternatively, you can only execute the first command, then then go to the [Nexus Sonatype] (https://s01.oss.sonatype.org/), login and then open *Staging Repositories* and click on *Refresh*. Here you'll see the artifact you just uploaded. In order to publish it, you have to **close** it and then **release** it. These actions will take a few minutes to complete. After * *releasing** the artifact, it will take:
 - a few hours before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
 - 1-3 days before you can see it on the [MVN Repository](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
