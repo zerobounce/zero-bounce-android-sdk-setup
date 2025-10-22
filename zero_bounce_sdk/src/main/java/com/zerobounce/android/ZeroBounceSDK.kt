@@ -7,6 +7,7 @@ import android.util.Log
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.zerobounce.android.ZeroBounceSDK.apiKey
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -54,10 +55,12 @@ object ZeroBounceSDK {
      * Initializes the SDK.
      *
      * @param apiKey the API key
+     * @param apiBaseUrl the API base URL
      */
-    fun initialize(apiKey: String) {
+    fun initialize(apiKey: String, apiBaseUrl: String? = null) {
         client = OkHttpClient()
         this.apiKey = apiKey
+        apiBaseUrl?.let { this.apiBaseUrl = apiBaseUrl }
     }
 
     /**
@@ -124,6 +127,12 @@ object ZeroBounceSDK {
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
+    @Deprecated(
+        "The 'guessFormat' method has been split into two specific functions. " +
+                "If you are finding a person's email, use 'findEmail()'. " +
+                "If you are only determining the domain's email pattern, use 'findDomain()'.",
+        level = DeprecationLevel.WARNING
+    )
     fun guessFormat(
         domain: String,
         firstName: String? = null,
@@ -138,6 +147,91 @@ object ZeroBounceSDK {
         firstName?.let { url += "&first_name=$firstName" }
         middleName?.let { url += "&middle_name=$middleName" }
         lastName?.let { url += "&last_name=$lastName" }
+
+        request(
+            url = url,
+            body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Finds the email based on a given [firstName], [domain] or [companyName].
+     *
+     * **Note**: At least one of [domain] or [companyName] must be provided.
+     *
+     * @param firstName the first name of the person whose email format is being searched
+     * @param domain the email domain for which to find the email format
+     * @param companyName the company name for which to find the email format
+     * @param middleName the middle name of the person whose email format is being searched;
+     * optional
+     * @param lastName the last name of the person whose email format is being searched; optional
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
+     */
+    fun findEmail(
+        firstName: String,
+        domain: String? = null,
+        companyName: String? = null,
+        middleName: String? = null,
+        lastName: String? = null,
+        responseCallback: (response: ZBFindEmailResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        // Validate that at least one of companyName or domain is provided.
+        if (companyName.isNullOrBlank() && domain.isNullOrBlank()) {
+            errorCallback(
+                ErrorResponse.parseError("Either companyName or domain must be provided.")
+            )
+            return
+        }
+
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&first_name=$firstName"
+        domain?.let { url += "&domain=$domain" }
+        companyName?.let { url += "&company_name=$companyName" }
+        middleName?.let { url += "&middle_name=$middleName" }
+        lastName?.let { url += "&last_name=$lastName" }
+
+        request(
+            url = url,
+            body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Find other domain formats based on a given [domain] or [companyName].
+     *
+     * **Note**: At least one of [domain] or [companyName] must be provided.
+     *
+     * @param domain the email domain for which to find the email format
+     * @param companyName the company name for which to find the email format
+     * @param responseCallback the response callback
+     * @param errorCallback the error callback
+     */
+    fun findDomain(
+        domain: String? = null,
+        companyName: String? = null,
+        responseCallback: (response: ZBFindDomainResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        // Validate that at least one of companyName or domain is provided.
+        if (companyName.isNullOrBlank() && domain.isNullOrBlank()) {
+            errorCallback(
+                ErrorResponse.parseError("Either companyName or domain must be provided.")
+            )
+            return
+        }
+
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey"
+        domain?.let { url += "&domain=$domain" }
+        companyName?.let { url += "&company_name=$companyName" }
 
         request(
             url = url,

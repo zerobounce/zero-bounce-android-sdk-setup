@@ -8,15 +8,17 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito.*
+import org.mockito.Mockito.`when`
 import org.mockito.junit.MockitoJUnitRunner
 import java.io.File
-import java.util.*
+import java.util.Date
 import java.util.concurrent.CountDownLatch
 
 @RunWith(MockitoJUnitRunner::class)
@@ -44,10 +46,9 @@ class ZeroBounceSDKTest {
         )
         server.start()
         // Prepare the server's url and overwrite the ZeroBounceSDK's base url
-        ZeroBounceSDK.apiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()
-        ZeroBounceSDK.initialize(API_KEY)
+        ZeroBounceSDK.initialize(API_KEY, apiBaseUrl = server.url("/").toString())
     }
 
     @Test
@@ -337,6 +338,7 @@ class ZeroBounceSDKTest {
         assertEquals(errorResponse, actualResponse)
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun guessFormat_ReturnsSuccess() {
         val countDownLatch = CountDownLatch(1)
@@ -402,6 +404,7 @@ class ZeroBounceSDKTest {
         assertEquals(actualResponse, gson.fromJson(temp, ZBEmailFinderResponse::class.java))
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun guessFormat_ReturnsError() {
         val countDownLatch = CountDownLatch(1)
@@ -417,6 +420,289 @@ class ZeroBounceSDKTest {
         // Do the actual request
         ZeroBounceSDK.guessFormat(
             domain = "example.com",
+            responseCallback = { rsp ->
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+
+    @Test
+    fun findEmail_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\n" +
+                "      \"email\": \"john.doe@example.com\",\n" +
+                "      \"domain\": \"example.com\",\n" +
+                "      \"email_confidence\": \"high\",\n" +
+                "      \"company_name\": \"X company\",\n" +
+                "      \"did_you_mean\": \"\",\n" +
+                "      \"failure_reason\": \"\"\n" +
+                "    }"
+        val expectedResponse = gson.fromJson(responseJson, ZBFindEmailResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findEmail(
+            firstName = "John doe",
+            domain = "example.com",
+            responseCallback = { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the response from the server matches the expected response.
+        assertEquals(expectedResponse, actualResponse)
+
+        // Test that the actualResponse is an instance of the ZBFindEmailResponse class
+        assertTrue(actualResponse is ZBFindEmailResponse)
+        val temp = (actualResponse as ZBFindEmailResponse).toJSON()
+        assertEquals(actualResponse, gson.fromJson(temp, ZBFindEmailResponse::class.java))
+    }
+
+    @Test
+    fun findEmail_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findEmail(
+            firstName = "John doe",
+            domain = "example.com",
+            responseCallback = { rsp ->
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun findEmail_NoCompanyNameNoDomain_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\"error\":[\"Either companyName or domain must be provided.\"]}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findEmail(
+            firstName = "John doe",
+            responseCallback = { rsp ->
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun findDomain_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\n" +
+                "      \"email\": \"john.doe@example.com\",\n" +
+                "      \"domain\": \"example.com\",\n" +
+                "      \"company_name\": \"X company\",\n" +
+                "      \"format\": \"first.last\",\n" +
+                "      \"confidence\": \"HIGH\",\n" +
+                "      \"did_you_mean\": \"\",\n" +
+                "      \"failure_reason\": \"\",\n" +
+                "      \"other_domain_formats\": [\n" +
+                "        {\n" +
+                "            \"format\": \"first_last\",\n" +
+                "            \"confidence\": \"HIGH\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "            \"format\": \"first\",\n" +
+                "            \"confidence\": \"MEDIUM\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }"
+        val expectedResponse = gson.fromJson(responseJson, ZBFindDomainResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findDomain(
+            domain = "example.com",
+            responseCallback = { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the response from the server matches the expected response.
+        assertEquals(expectedResponse, actualResponse)
+
+        // Test that the actualResponse is an instance of the ZBFindDomainResponse class
+        assertTrue(actualResponse is ZBFindDomainResponse)
+        val temp = (actualResponse as ZBFindDomainResponse).toJSON()
+        assertEquals(actualResponse, gson.fromJson(temp, ZBFindDomainResponse::class.java))
+    }
+
+    @Test
+    fun findDomain_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findDomain(
+            domain = "example.com",
+            responseCallback = { rsp ->
+                countDownLatch.countDown()
+            },
+            errorCallback = { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        // If this is null, then the request has been made and the server must take the request.
+        // Otherwise, a check error has occurred and thus, there was no need to do the request. The
+        // error is already in the actualResponse field.
+        if (actualResponse == null) {
+            // Catch the request on the server (this will trigger the callbacks above)
+            val request = server.takeRequest()
+
+            // Check the API Key is not missing
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+        }
+
+        // Await for the response to be parsed
+        countDownLatch.await()
+
+        // Test that the error json from the server matches the expected error json.
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun findDomain_NoCompanyNameNoDomain_ReturnsError() {
+        val countDownLatch = CountDownLatch(1)
+
+        // Prepare mock response and add it to the server
+        val responseJson = "{\"error\":[\"Either companyName or domain must be provided.\"]}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+
+        server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        // Do the actual request
+        ZeroBounceSDK.findDomain(
             responseCallback = { rsp ->
                 countDownLatch.countDown()
             },

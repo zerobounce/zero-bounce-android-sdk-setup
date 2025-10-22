@@ -73,5 +73,8 @@ enum class ZBValidateSubStatus {
     DISPOSABLE,
 
     @SerializedName("toxic")
-    TOXIC
+    TOXIC,
+
+    @SerializedName("accept_all")
+    ACCEPT_ALL
 }

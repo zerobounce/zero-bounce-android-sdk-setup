@@ -8,14 +8,14 @@ plugins {
 
 ext {
     PUBLISH_GROUP_ID = 'com.zerobounce.android'
-    PUBLISH_VERSION = '1.2.1'
+    PUBLISH_VERSION = '1.3.0'
     PUBLISH_ARTIFACT_ID = 'zerobouncesdk'
 }
 
 tasks.withType(DokkaTask).configureEach {
     dokkaSourceSets {
         named("main") {
-            outputDirectory.set(buildDir.resolve("javadoc"))
+            outputDirectory.set(layout.buildDirectory.dir.resolve("javadoc").get().asFile)
 //            noAndroidSdkLink.set(false)
 
             // Do not create index pages for empty packages
@@ -31,10 +31,10 @@ tasks.withType(DokkaTask).configureEach {
 }
 
 android {
-    compileSdk 33
+    compileSdk = 36
     defaultConfig {
         minSdk 21
-        targetSdk 33
+        targetSdk 36
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
@@ -54,25 +54,37 @@ android {
             resources.srcDirs += ['email_file.csv']
         }
     }
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
 
     namespace 'com.zerobounce.android'
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-    implementation 'com.google.code.gson:gson:2.9.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'com.squareup.okhttp3:okhttp:5.2.1'
+    implementation 'com.google.code.gson:gson:2.13.2'
 
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.10.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:5.2.1'
     testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0'
-    testImplementation 'org.powermock:powermock-module-junit4:2.0.2'
-    testImplementation 'org.powermock:powermock-core:2.0.2'
-    testImplementation 'org.powermock:powermock-api-mockito2:2.0.2'
+    testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
+    testImplementation 'org.powermock:powermock-core:2.0.9'
+    testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
 
     dokkaJavadoc.dependsOn(':zero_bounce_sdk:generateReleaseRFile')
 }
@@ -80,7 +92,7 @@ repositories {
     mavenCentral()
 }
 
-tasks.withType(Javadoc) {
+tasks.withType(Javadoc).configureEach {
     options.addBooleanOption('Xdoclint:none', true)
 }
 
