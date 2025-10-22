@@ -8,6 +8,12 @@ tasks.withType(dokkaHtmlPartial.getClass()).configureEach {
     )
 }
 
+tasks.register('javadocJar', Jar) {
+    dependsOn dokkaJavadoc
+    archiveClassifier.set('javadoc')
+    from dokkaJavadoc.outputDirectory
+}
+
 group = PUBLISH_GROUP_ID
 version = PUBLISH_VERSION
 
@@ -25,6 +31,8 @@ afterEvaluate {
                 } else {
                     from components.java
                 }
+
+                artifact javadocJar
 
                 pom {
                     name = PUBLISH_ARTIFACT_ID
