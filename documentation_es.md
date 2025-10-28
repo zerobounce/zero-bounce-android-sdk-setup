@@ -2,7 +2,7 @@
 Puedes instalar ZeroBounceSDK agregando la dependencia a tu archivo Gradle:
 
 ```gradle
-implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
+implementation 'com.zerobounce.android:zerobouncesdk:<latest_version>'
 ```
 
 ##### Uso
@@ -325,7 +325,7 @@ Si deseas publicar manualmente en el repositorio Nexus (y luego lanzarlo en Mave
 ```
 
 Alternativamente, solo puedes ejecutar el primer comando y luego ir a [Nexus Sonatype](https://s01.oss.sonatype.org/), iniciar sesión y abrir *Staging Repositories* y hacer clic en *Refresh*. Aquí verás el artefacto que acabas de cargar. Para publicarlo, debes **cerrarlo** y luego **lanzarlo**. Estas acciones tardarán unos minutos en completarse. Después de **lanzar** el artefacto, tardará:
-- algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk/1.2.1)
+- algunas horas en aparecer en el [Repositorio de Maven](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) y en la [Búsqueda de Sonatype](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk)
 - de 1 a 3 días en aparecer en el [Repositorio de MVN](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk)
 
 ##### Exportar e importar claves PGP

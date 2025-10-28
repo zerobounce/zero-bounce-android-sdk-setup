@@ -50,7 +50,7 @@ dependencies {
     // Replace the local import with the remote import if you want to use the latest version from
     // Maven Central
     implementation project(path: ':zero_bounce_sdk')
-//    implementation 'com.zerobounce.android:zerobouncesdk:1.2.1'
+//    implementation 'com.zerobounce.android:zerobouncesdk:<latest_version>'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
