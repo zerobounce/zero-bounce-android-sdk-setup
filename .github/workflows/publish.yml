@@ -35,7 +35,7 @@ jobs:
       - name: Check if the version exists
         run: |
           CURRENT_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
-          NEW_TAG="v/$CURRENT_VERSION"
+          NEW_TAG="v$CURRENT_VERSION"
 
           if [ $(git tag -l "$NEW_TAG") ]; then
             echo "Error: The tag exists. Please increase the version manually."
@@ -108,11 +108,11 @@ jobs:
           NEW_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
 
           # Save the the new tag in env variables
-          NEW_TAG="v/$CURRENT_VERSION"
+          NEW_TAG="v$CURRENT_VERSION"
           echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_ENV"
 
           # Fetch the last used tag and save it in the env variables
-          LAST_TAG=$(git describe --tags --abbrev=0 --match "v/*")
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*")
           echo "LAST_TAG=$LAST_TAG" >> "$GITHUB_ENV"
 
           git config --global user.name "Continuous Integration"
