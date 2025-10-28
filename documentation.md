@@ -292,7 +292,7 @@ The documentation of the SDK can be generated through a *Gradle* task. Open the 
 
 
 #### Publication
-Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. Don't forget to update the version before doing a release!
+Every time a new release is created, the CI/CD pipeline will execute and a new artifact will be released on Maven Central. **The pipeline updates the version automatically!**
 If you ever change the OSSRH login credentials, you'll need to also update the repository variables on Github.
 
 

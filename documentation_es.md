@@ -202,12 +202,10 @@ Luego puedes utilizar cualquiera de los métodos del SDK. Aquí tienes algunos e
         },
         { error -> 
             Log.e("MainActivity", "validate error: $error") 
-            //
-
-Tu implementación
-}
-)
-```
+            // Tu implementación
+        }
+  )
+  ```
 
 
 ##### API de puntuación de IA (AI Scoring)
@@ -297,7 +295,7 @@ La documentación del SDK se puede generar a través de una tarea de *Gradle*. A
 ***. Una vez generada, puedes encontrarla en *zero_bounce_sdk/build/dokka/html*. Desde allí, solo tienes que abrir el archivo `index.html`.
 
 ##### Publicación
-Cada vez que se crea una nueva versión, el flujo de trabajo de CI/CD se ejecutará y se lanzará un nuevo artefacto en Maven Central. No olvides actualizar la versión antes de hacer un lanzamiento. Si alguna vez cambias las credenciales de inicio de sesión de OSSRH, también deberás actualizar las variables del repositorio en Github.
+Cada vez que se crea una nueva versión, el flujo de trabajo de CI/CD se ejecutará y se lanzará un nuevo artefacto en Maven Central. **¡El pipeline actualiza la versión automáticamente!**. Si alguna vez cambias las credenciales de inicio de sesión de OSSRH, también deberás actualizar las variables del repositorio en Github.
 
 ##### Configuración local para lanzamiento manual
 Para poder publicar en el repositorio Nexus desde tu máquina local, debes seguir estos pasos:
