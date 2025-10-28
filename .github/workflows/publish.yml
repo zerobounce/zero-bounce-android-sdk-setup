@@ -105,7 +105,7 @@ jobs:
       - name: Create tag for current version
         run: |
           # Extract the version from pubspec.yaml
-          NEW_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
+          CURRENT_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
 
           # Save the the new tag in env variables
           NEW_TAG="v$CURRENT_VERSION"
