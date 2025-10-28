@@ -9,7 +9,7 @@ plugins {
 
 ext {
     PUBLISH_GROUP_ID = 'com.zerobounce.android'
-    PUBLISH_VERSION = '1.4.0'
+    PUBLISH_VERSION = '1.4.1'
     PUBLISH_ARTIFACT_ID = 'zerobouncesdk'
 }
 
