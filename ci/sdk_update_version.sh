@@ -4,7 +4,7 @@
 level_change=$1
 auto_increase=$2
 
-# Extract the version from pubspec.yaml
+# Extract the version from zero_bounce_sdk/build.gradle
 version_name=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
 
 major=$(echo $version_name | awk -F. '{print $1}')
@@ -49,5 +49,5 @@ new_version="$major.$minor.$patch"
 
 echo "New version: $new_version"
 
-# Update the pubspec.yaml with the new version
+# Update the zero_bounce_sdk/build.gradle with the new version
 sed -i.bak -E "s/(PUBLISH_VERSION = ).*/\1'$new_version'/" zero_bounce_sdk/build.gradle && rm zero_bounce_sdk/build.gradle.bak
