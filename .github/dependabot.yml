@@ -4,7 +4,7 @@
 
 version: 2
 updates:
-  # Keep the Flutter dependencies up to date
+  # Keep the Android dependencies up to date
   - package-ecosystem: "gradle" # See documentation for possible values
     directory: "/" # Location of package manifests
     schedule:
@@ -14,7 +14,7 @@ updates:
     labels:
       - "android dependencies"
     groups:
-      dart:
+      android:
         applies-to: version-updates
         patterns:
           - "*"       # A wildcard that matches all dependencies in the package

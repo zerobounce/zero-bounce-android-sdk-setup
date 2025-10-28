@@ -94,7 +94,7 @@ jobs:
           # Bump the project version based on the input
           sh ci/sdk_update_version.sh ${{ github.event.inputs.increase-type }} ${{ github.event.inputs.auto-increase }}
 
-          # Extract the version from pubspec.yaml
+          # Extract the version from zero_bounce_sdk/build.gradle
           NEW_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
 
           # Push the commit with the new version
@@ -104,7 +104,7 @@ jobs:
 
       - name: Create tag for current version
         run: |
-          # Extract the version from pubspec.yaml
+          # Extract the version from zero_bounce_sdk/build.gradle
           CURRENT_VERSION=$(awk -F"'" '/PUBLISH_VERSION/ {print $2}' zero_bounce_sdk/build.gradle)
 
           # Save the the new tag in env variables
