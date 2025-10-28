@@ -112,7 +112,7 @@ jobs:
           echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_ENV"
 
           # Fetch the last used tag and save it in the env variables
-          LAST_TAG=$(git describe --tags --abbrev=0 --match "$TAG_PREFIX/*")
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v/*")
           echo "LAST_TAG=$LAST_TAG" >> "$GITHUB_ENV"
 
           git config --global user.name "Continuous Integration"
