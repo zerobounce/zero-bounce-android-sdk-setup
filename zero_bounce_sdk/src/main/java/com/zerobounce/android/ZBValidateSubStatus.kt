@@ -33,8 +33,8 @@ enum class ZBValidateSubStatus {
     @SerializedName("exception_occurred")
     EXCEPTION_OCCURRED,
 
-    @SerializedName("possible_traps")
-    POSSIBLE_TRAPS,
+    @SerializedName("possible_trap")
+    POSSIBLE_TRAP,
 
     @SerializedName("role_based")
     ROLE_BASED,
@@ -61,7 +61,7 @@ enum class ZBValidateSubStatus {
     LEADING_PERIOD_REMOVED,
 
     @SerializedName("does_not_accept_mail")
-    DOES_NOT_ACCPET_MAIL,
+    DOES_NOT_ACCEPT_MAIL,
 
     @SerializedName("alias_address")
     ALIAS_ADDRESS,
@@ -75,6 +75,24 @@ enum class ZBValidateSubStatus {
     @SerializedName("toxic")
     TOXIC,
 
+    @SerializedName("alternate")
+    ALTERNATE,
+
+    @SerializedName("mx_forward")
+    MX_FORWARD,
+
+    @SerializedName("blocked")
+    BLOCKED,
+
+    @SerializedName("allowed")
+    ALLOWED,
+
     @SerializedName("accept_all")
-    ACCEPT_ALL
+    ACCEPT_ALL,
+
+    @SerializedName("role_based_accept_all")
+    ROLE_BASED_ACCEPT_ALL,
+
+    @SerializedName("gold")
+    GOLD
 }

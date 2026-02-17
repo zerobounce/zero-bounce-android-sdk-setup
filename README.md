@@ -19,10 +19,44 @@ Import the sdk in your file:
 import com.zerobounce.android.ZeroBounceSDK
 ```
 
-Initialize the sdk with your api key:
+Initialize the SDK with your API key. You can optionally specify a base URL to use a different API region or a custom endpoint:
+
+**Default**: Uses the default ZeroBounce API endpoint
 ```kotlin
 ZeroBounceSDK.initialize("<YOUR_API_KEY>")
 ```
+
+**Using predefined API regions**: Use one of the available API regions
+```kotlin
+import com.zerobounce.android.ZBConstants
+
+// Use USA region
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API_USA_URL)
+
+// Use EU region
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API_EU_URL)
+
+// Use default region (explicit)
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API_DEFAULT_URL)
+```
+
+**Using a custom URL string**: Provide your own base URL
+```kotlin
+ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = "https://custom-api.example.com/v2")
+```
+
+**Available API regions:**
+- `ZBConstants.API_DEFAULT_URL` - Default ZeroBounce API (https://api.zerobounce.net/v2/)
+- `ZBConstants.API_USA_URL` - USA region API (https://api-us.zerobounce.net/v2/)
+- `ZBConstants.API_EU_URL` - EU region API (https://api-eu.zerobounce.net/v2/)
+
+## Validation statuses and sub-statuses
+
+The `validate` and `validateBatch` responses include `status` ([ZBValidateStatus](https://github.com/zerobounce/zero-bounce-android-sdk-setup/blob/main/zero_bounce_sdk/src/main/java/com/zerobounce/android/ZBValidateStatus.kt)) and `subStatus` ([ZBValidateSubStatus](https://github.com/zerobounce/zero-bounce-android-sdk-setup/blob/main/zero_bounce_sdk/src/main/java/com/zerobounce/android/ZBValidateSubStatus.kt)).
+
+**ZBValidateStatus** values: `NONE`, `VALID`, `INVALID`, `CATCH_ALL`, `UNKNOWN`, `SPAMTRAP`, `ABUSE`, `DO_NOT_MAIL`
+
+**ZBValidateSubStatus** values (examples): `ANTISPAM_SYSTEM`, `GREYLISTED`, `MAIL_SERVER_TEMPORARY_ERROR`, `FORCIBLE_DISCONNECT`, `MAIL_SERVER_DID_NOT_RESPOND`, `TIMEOUT_EXCEEDED`, `FAILED_SMTP_CONNECTION`, `MAILBOX_QUOTA_EXCEEDED`, `EXCEPTION_OCCURRED`, `POSSIBLE_TRAP`, `ROLE_BASED`, `GLOBAL_SUPPRESSION`, `MAILBOX_NOT_FOUND`, `NO_DNS_ENTRIES`, `FAILED_SYNTAX_CHECK`, `POSSIBLE_TYPO`, `UNROUTABLE_IP_ADDRESS`, `LEADING_PERIOD_REMOVED`, `DOES_NOT_ACCEPT_MAIL`, `ALIAS_ADDRESS`, `ROLE_BASED_CATCH_ALL`, `DISPOSABLE`, `TOXIC`, `ALTERNATE`, `MX_FORWARD`, `BLOCKED`, `ALLOWED`, `ACCEPT_ALL`, `ROLE_BASED_ACCEPT_ALL`, `GOLD`
 
 ## Examples
 Then you can use any of the SDK methods, for example:
@@ -117,22 +151,25 @@ Then you can use any of the SDK methods, for example:
     // import java.io.File
     val myFile = File("<FILE_PATH>")  // The csv or txt file
     val emailAddressColumn = 3        // The column index of email address in the file. Index starts at 1
+    val returnUrl = "https://domain.com/called/after/processing/request"
     val firstNameColumn = 4           // The column index of first name in the file
     val lastNameColumn = 5            // The column index of last name in the file
     val genderColumn = 6              // The column index of gender in the file
     val ipAddressColumn = 7           // The column index of IP address in the file
-    val hasHeaderRow = true           // If this is `true` the first row is considered as table headers 
-    val returnUrl = "https://domain.com/called/after/processing/request"
+    val hasHeaderRow = true           // If this is `true` the first row is considered as table headers
+    val removeDuplicate = true        // If you want the system to remove duplicate emails
 
     ZeroBounceSDK.sendFile(
         context,
-        file,
-        returnUrl, 
-        firstNameColumn, 
+        myFile,
+        emailAddressColumn,
+        firstNameColumn,
         lastNameColumn,
-        genderColumn, 
-        ipAddressColumn, 
+        genderColumn,
+        ipAddressColumn,
+        returnUrl,
         hasHeaderRow,
+        removeDuplicate,
         { rsp ->
             Log.d("MainActivity", "sendFile rsp: $rsp")
             // your implementation

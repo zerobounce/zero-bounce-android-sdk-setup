@@ -117,6 +117,30 @@ data class ZBGetApiUsageResponse(
     @SerializedName("sub_status_failed_smtp_connection")
     val subStatusFailedSmtpConnection: Int = 0,
 
+    // Total number of times the API has a sub status of "mx_forward"
+    @SerializedName("sub_status_mx_forward")
+    val subStatusMxForward: Int = 0,
+
+    // Total number of times the API has a sub status of "alternate"
+    @SerializedName("sub_status_alternate")
+    val subStatusAlternate: Int = 0,
+
+    // Total number of times the API has a sub status of "allowed"
+    @SerializedName("sub_status_allowed")
+    val subStatusAllowed: Int = 0,
+
+    // Total number of times the API has a sub status of "blocked"
+    @SerializedName("sub_status_blocked")
+    val subStatusBlocked: Int = 0,
+
+    // Total number of times the API has a sub status of "gold"
+    @SerializedName("sub_status_gold")
+    val subStatusGold: Int = 0,
+
+    // Total number of times the API has a sub status of "role_based_accept_all"
+    @SerializedName("sub_status_role_based_accept_all")
+    val subStatusRoleBasedAcceptAll: Int = 0,
+
     // Start date of query
     @SerializedName("start_date")
     val startDate: String? = null,
