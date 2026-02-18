@@ -117,6 +117,10 @@ data class ZBGetApiUsageResponse(
     @SerializedName("sub_status_failed_smtp_connection")
     val subStatusFailedSmtpConnection: Int = 0,
 
+    // Total number of times the API has a sub status of "accept_all"
+    @SerializedName("sub_status_accept_all")
+    val subStatusAcceptAll: Int = 0,
+
     // Total number of times the API has a sub status of "mx_forward"
     @SerializedName("sub_status_mx_forward")
     val subStatusMxForward: Int = 0,

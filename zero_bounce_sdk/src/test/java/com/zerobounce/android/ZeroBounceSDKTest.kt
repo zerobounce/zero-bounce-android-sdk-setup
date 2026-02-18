@@ -848,6 +848,7 @@ class ZeroBounceSDKTest {
                 "      \"sub_status_mailbox_quota_exceeded\": 0,\n" +
                 "      \"sub_status_forcible_disconnect\": 0,\n" +
                 "      \"sub_status_failed_smtp_connection\": 0,\n" +
+                "      \"sub_status_accept_all\": 0,\n" +
                 "      \"start_date\": \"1/1/2018\",\n" +
                 "      \"end_date\": \"12/12/2019\"\n" +
                 "    }"
