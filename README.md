@@ -1,6 +1,6 @@
 ## ZeroBounce Android SDK
 
-[![Maven Central](https://img.shields.io/maven-central/v/com.zerobounce.android/zerobouncesdk?label=Latest%20release)](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg)](https://github.com/zerobounce/zero-bounce-india-android-sdk-setup/actions/workflows/publish.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/com.zerobounce.android/zerobouncesdk?label=Latest%20release)](https://mvnrepository.com/artifact/com.zerobounce.android/zerobouncesdk) [![Build Status](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml/badge.svg)](https://github.com/zerobounce/zero-bounce-android-sdk-setup/actions/workflows/publish.yml)
 
 This SDK contains methods for interacting easily with ZeroBounce API.
 More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
