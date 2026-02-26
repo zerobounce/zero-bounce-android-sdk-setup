@@ -12,3 +12,6 @@
 /build
 /captures
 .externalNativeBuild
+
+.DS_Store
+.env

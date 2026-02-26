@@ -393,6 +393,23 @@ Then you can use any of the SDK methods, for example:
    )
    ``` 
 
+## Testing
+
+Unit tests (JVM only, no emulator) can be run locally or via Docker.
+
+**Local:** from this directory run:
+```bash
+./gradlew :zero_bounce_sdk:test
+```
+
+**Docker:** from the **parent repository root** (where `docker-compose.yml` lives):
+```bash
+docker compose build android
+docker compose run --rm android
+```
+
+See the repo-wide [TESTING.md](../TESTING.md) for all SDK test commands.
+
 ## Documentation
 
 The documentation of the SDK can be generated through a *Gradle* task. Open the *Gradle* tab (on the default layout, it should be at the right side of the Android Studio), then go to *zero_bounce_sdk > Tasks > documentation* and double click on the ***dokkaHtml*** task. After it is generated, you can find it in *zero_bounce_sdk/build/dokka/html*. From there you only have to open the ```index.html``` file.

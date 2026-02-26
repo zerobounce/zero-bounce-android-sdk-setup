@@ -1,0 +1,14 @@
+# Build outputs and caches
+.gradle
+**/build/
+**/.gradle/
+local.properties
+
+# IDE and OS
+.idea
+*.iml
+.DS_Store
+
+# Git
+.git
+.gitignore

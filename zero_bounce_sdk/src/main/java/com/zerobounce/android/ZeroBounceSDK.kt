@@ -21,6 +21,7 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -341,6 +342,42 @@ object ZeroBounceSDK {
     }
 
     /**
+     * The sendFile API allows user to send a file from a stream (e.g. in-memory CSV or upload stream).
+     * The stream is not closed by the SDK.
+     */
+    @Throws(ZBException::class)
+    fun sendFile(
+        inputStream: InputStream,
+        fileName: String,
+        emailAddressColumnIndex: Int,
+        firstNameColumnIndex: Int? = null,
+        lastNameColumnIndex: Int? = null,
+        genderColumnIndex: Int? = null,
+        ipAddressColumnIndex: Int? = null,
+        returnUrl: String? = null,
+        hasHeaderRow: Boolean = false,
+        removeDuplicate: Boolean? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        sendFileInternalStream(
+            scoring = false,
+            inputStream = inputStream,
+            fileName = fileName,
+            emailAddressColumnIndex = emailAddressColumnIndex,
+            firstNameColumnIndex = firstNameColumnIndex,
+            lastNameColumnIndex = lastNameColumnIndex,
+            genderColumnIndex = genderColumnIndex,
+            ipAddressColumnIndex = ipAddressColumnIndex,
+            returnUrl = returnUrl,
+            hasHeaderRow = hasHeaderRow,
+            removeDuplicate = removeDuplicate,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback,
+        )
+    }
+
+    /**
      * The scoringSendFile API allows user to send a file for bulk email validation.
      *
      * @param context the app context
@@ -374,6 +411,34 @@ object ZeroBounceSDK {
             hasHeaderRow = hasHeaderRow,
             removeDuplicate = removeDuplicate,
             responseCallback = responseCallback, errorCallback = errorCallback,
+        )
+    }
+
+    /**
+     * The scoringSendFile API allows user to send a file from a stream.
+     * The stream is not closed by the SDK.
+     */
+    @Throws(ZBException::class)
+    fun scoringSendFile(
+        inputStream: InputStream,
+        fileName: String,
+        emailAddressColumnIndex: Int,
+        returnUrl: String? = null,
+        hasHeaderRow: Boolean = false,
+        removeDuplicate: Boolean? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        sendFileInternalStream(
+            scoring = true,
+            inputStream = inputStream,
+            fileName = fileName,
+            emailAddressColumnIndex = emailAddressColumnIndex,
+            returnUrl = returnUrl,
+            hasHeaderRow = hasHeaderRow,
+            removeDuplicate = removeDuplicate,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback,
         )
     }
 
@@ -503,6 +568,71 @@ object ZeroBounceSDK {
             }
         })
 
+    }
+
+    @Throws(ZBException::class)
+    private fun sendFileInternalStream(
+        scoring: Boolean,
+        inputStream: InputStream,
+        fileName: String,
+        emailAddressColumnIndex: Int,
+        returnUrl: String? = null,
+        firstNameColumnIndex: Int? = null,
+        lastNameColumnIndex: Int? = null,
+        genderColumnIndex: Int? = null,
+        ipAddressColumnIndex: Int? = null,
+        hasHeaderRow: Boolean = false,
+        removeDuplicate: Boolean? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        if (emailAddressColumnIndex < 1) {
+            throw ZBException("Index for emailAddressColumnIndex must start from 1.")
+        }
+
+        val fileBody = inputStream.readBytes().toRequestBody("text/csv".toMediaTypeOrNull())
+        val builder = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", fileName, fileBody)
+            .addFormDataPart("api_key", "$apiKey")
+            .addFormDataPart("email_address_column", "$emailAddressColumnIndex")
+
+        if (returnUrl != null) builder.addFormDataPart("return_url", returnUrl)
+        if (firstNameColumnIndex != null) builder.addFormDataPart("first_name_column", "$firstNameColumnIndex")
+        if (lastNameColumnIndex != null) builder.addFormDataPart("last_name_column", "$lastNameColumnIndex")
+        if (genderColumnIndex != null) builder.addFormDataPart("gender_column", "$genderColumnIndex")
+        if (ipAddressColumnIndex != null) builder.addFormDataPart("ip_address_column", "$ipAddressColumnIndex")
+        builder.addFormDataPart("has_header_row", "$hasHeaderRow")
+        if (removeDuplicate != null) builder.addFormDataPart("remove_duplicate", "$removeDuplicate")
+
+        val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
+        val request = Request.Builder()
+            .url("$baseUrl/sendfile")
+            .post(builder.build())
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (logEnabled) Log.d("ZeroBounceSDK", "response: $json")
+                if (response.isSuccessful) {
+                    try {
+                        val rsp = json?.toObject<ZBSendFileResponse>()
+                        responseCallback(rsp)
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                if (logEnabled) Log.d("ZeroBounceSDK", "sendFile error=$e")
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
     }
 
     /**
