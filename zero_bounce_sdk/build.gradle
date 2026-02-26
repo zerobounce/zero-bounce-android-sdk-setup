@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id 'com.android.library'
-    id 'kotlin-android'
+    // kotlin-android removed: AGP 9.0+ has built-in Kotlin support (https://kotl.in/gradle/agp-built-in-kotlin)
     id("org.jetbrains.dokka") version "2.1.0"
     id("org.jetbrains.dokka-javadoc") version "2.1.0"
 }
@@ -11,28 +11,6 @@ ext {
     PUBLISH_GROUP_ID = 'com.zerobounce.android'
     PUBLISH_VERSION = '1.5.1'
     PUBLISH_ARTIFACT_ID = 'zerobouncesdk'
-}
-
-dokka {
-    dokkaPublications.html {
-        outputDirectory.set(
-                layout.buildDirectory.dir("dokka"),
-        )
-    }
-    dokkaPublications.javadoc {
-        outputDirectory.set(layout.buildDirectory.dir("dokka/javadoc"))
-    }
-    dokkaSourceSets.main {
-        // Do not create index pages for empty packages
-        skipEmptyPackages = true
-
-        // Do not output deprecated members. Applies globally, can be overridden by
-        // packageOptions
-        skipDeprecated = false
-
-        // No default documentation link to kotlin-stdlib
-        enableKotlinStdLibDocumentationLink = false
-    }
 }
 
 android {
@@ -81,6 +59,23 @@ android {
     }
 
     namespace 'com.zerobounce.android'
+}
+
+dokka {
+    dokkaPublications.html {
+        outputDirectory.set(
+                layout.buildDirectory.dir("dokka"),
+        )
+    }
+    dokkaPublications.javadoc {
+        outputDirectory.set(layout.buildDirectory.dir("dokka/javadoc"))
+    }
+    dokkaSourceSets.configureEach {
+        // Do not create index pages for empty packages
+        skipEmptyPackages = true
+        skipDeprecated = false
+        enableKotlinStdLibDocumentationLink = false
+    }
 }
 
 dependencies {
