@@ -578,3 +578,8 @@ parameter in `initialize()`. For convenience, the following constants are availa
 To use the EU endpoint for initialization:
 ```kotlin
 ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API_EU_URL)
+```
+
+## Publish
+
+See the [sdk-docs (Maven Central)](../sdk-docs/maven-central/) guide in the SDKs repo for Sonatype setup and publish steps.
