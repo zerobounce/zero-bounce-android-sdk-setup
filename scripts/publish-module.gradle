@@ -41,7 +41,7 @@ afterEvaluate {
                         developer {
                           id = 'zerobounce'
                           name = 'Zero Bounce'
-                          email = 'github@zerobounce.net'
+                          email = 'integrations@zerobounce.net'
                         }
                     }
 
