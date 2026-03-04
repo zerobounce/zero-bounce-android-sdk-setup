@@ -4,19 +4,43 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to publish (e.g. v2.0.17)'
-        required: true
         type: string
+        description: Tag to publish (e.g. v2.0.17)
+        required: true
 
 jobs:
-  publish:
-    name: Test, release build and publish
+  validate-tag:
+    name: Validate tag
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
+      - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag exists
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            echo "Error: Tag is required."
+            exit 1
+          fi
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Error: Tag '$TAG' does not exist."
+            exit 1
+          fi
+          echo "Publishing tag: $TAG"
+
+  publish:
+    name: Test, release build and publish
+    needs: [validate-tag]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
