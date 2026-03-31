@@ -24,6 +24,9 @@ data class ZBFileStatusResponse(
     @SerializedName("file_status")
     private var fileStatus: String? = null,
 
+    @SerializedName("file_phase_2_status")
+    private var filePhase2Status: String? = null,
+
     @SerializedName("complete_percentage")
     private var completePercentage: String? = null,
 

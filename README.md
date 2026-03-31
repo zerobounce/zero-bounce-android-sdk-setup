@@ -158,6 +158,7 @@ Then you can use any of the SDK methods, for example:
     val ipAddressColumn = 7           // The column index of IP address in the file
     val hasHeaderRow = true           // If this is `true` the first row is considered as table headers
     val removeDuplicate = true        // If you want the system to remove duplicate emails
+    val allowPhase2 = true            // optional: API `allow_phase_2` — Verify+ and catch-all rules apply
 
     ZeroBounceSDK.sendFile(
         context,
@@ -170,6 +171,7 @@ Then you can use any of the SDK methods, for example:
         returnUrl,
         hasHeaderRow,
         removeDuplicate,
+        allowPhase2,
         { rsp ->
             Log.d("MainActivity", "sendFile rsp: $rsp")
             // your implementation
@@ -180,6 +182,7 @@ Then you can use any of the SDK methods, for example:
         },
     )
     ```
+    See ZeroBounce [sendfile parameters](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-send-file): `allow_phase_2` requests catch-all (phase 2) validation after phase 1 when **Verify+** is enabled and the file meets API rules (e.g. more than 10 catch-all emails). Otherwise `file_phase_2_status` may stay `N/A`.
 
 * ##### The *getFile* API allows users to get the validation results file for the file been submitted using *sendFile* API
     ```kotlin
@@ -195,16 +198,29 @@ Then you can use any of the SDK methods, for example:
         { error -> 
             Log.e("MainActivity", "getfile error: $error") 
             // your implementation
-        }
+        },
+        downloadType = null,
+        activityData = null, // optional: true → `activity_data` (validation only)
     )
     ```
+    ```kotlin
+    ZeroBounceSDK.getFile(
+        context,
+        fileId,
+        { rsp -> Log.d("MainActivity", "getfile combined rsp: $rsp") },
+        { error -> Log.e("MainActivity", "getfile combined error: $error") },
+        downloadType = ZBDownloadType.COMBINED,
+    )
+    ```
+    See [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file): `phase_2` / `combined` only when `file_phase_2_status = Complete`. Optional `activity_data` → [activity data](https://www.zerobounce.net/docs/activity-data). JSON errors may use HTTP 200; the SDK returns them via `errorCallback`.
+
+    Pass `downloadType` / `activityData` as **named** arguments after the two callbacks (avoids ambiguity with Kotlin overloads).
 
 * ##### Check the status of a file uploaded via *sendFile* method
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
 
     ZeroBounceSDK.fileStatus(
-        context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "fileStatus rsp: $rsp")
@@ -216,13 +232,23 @@ Then you can use any of the SDK methods, for example:
         }
     )
     ```
+    The file status response includes `file_phase_2_status` between `file_status` and
+    `complete_percentage`.
+    - Successful response - phase 2 disabled: `file_phase_2_status = "N/A"`
+    - Successful response - phase 2 enabled: `file_phase_2_status = "Complete"`
+    - Other possible values:
+      - `file_status=Queued` -> `file_phase_2_status="Queued"`
+      - `file_status=Processing` -> `file_phase_2_status="Processing"`
+      - `file_status=CatchAllProcessing` -> `file_phase_2_status="Processing"`
+      - `file_status=Complete` -> `file_phase_2_status="Complete"`
+      - for all other statuses, `file_phase_2_status` copies `file_status`
+    The `return_url` callback behavior remains unchanged.
 
 * ##### Delete the file that was submitted using *sendFile* API. File can be deleted only when its status is `Complete`
     ```kotlin
     val fileId = "<FILE_ID>"   // The returned file ID when calling sendfile API
 
     ZeroBounceSDK.deleteFile(
-        context,
         fileId,
         { rsp -> 
             Log.d("MainActivity", "deleteFile rsp: $rsp")
@@ -234,6 +260,7 @@ Then you can use any of the SDK methods, for example:
         }
     )
     ```
+    [v2 deletefile](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-delete-file): allowed when `file_status` is `Complete`.
 
 * ##### Gather insights into your subscribers’ overall email engagement. The request returns data regarding opens, clicks, forwards and unsubscribes that have taken place in the past 30, 90, 180 or 365 days.
     ```kotlin
@@ -252,6 +279,8 @@ Then you can use any of the SDK methods, for example:
 
 ### AI Scoring API
 
+**Live API behavior (verified against production):** The scoring bulk base URL (`.../v2/scoring`) differs from validation bulk. In our checks, `filestatus` did not include `file_phase_2_status`, and `getfile` accepted `phase_1`, `phase_2`, and `combined` and returned the same scoring CSV each time. Validation bulk returns `file_phase_2_status` and may return a JSON error (HTTP 200) for `phase_2`/`combined` when phase 2 is not enabled.
+
 * ##### The *scoringSendFile* API allows user to send a file for bulk email validation
     ```kotlin
     // import java.io.File
@@ -262,7 +291,7 @@ Then you can use any of the SDK methods, for example:
 
     ZeroBounceSDK.scoringSendFile(
         context,
-        file,
+        myFile,
         emailAddressColumn,
         returnUrl, 
         hasHeaderRow,
@@ -300,7 +329,6 @@ Then you can use any of the SDK methods, for example:
     val fileId = "<FILE_ID>"    // The returned file ID when calling scoringSendFile API
 
     ZeroBounceSDK.scoringFileStatus(
-        context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "scoringFileStatus rsp: $rsp")
@@ -318,7 +346,6 @@ Then you can use any of the SDK methods, for example:
     val fileId = "<FILE_ID>"   // The returned file ID when calling scoringSendFile API
 
     ZeroBounceSDK.scoringDeleteFile(
-        context, 
         fileId,
         { rsp -> 
             Log.d("MainActivity", "scoringDeleteFile rsp: $rsp")

@@ -306,6 +306,9 @@ object ZeroBounceSDK {
      * @param hasHeaderRow if the first row from the submitted file is a header row
      * @param removeDuplicate if you want the system to remove duplicate emails (true or false,
      * default on the server is true)
+     * @param allowPhase2 if not null, sent as `allow_phase_2` (validation bulk only). When true,
+     * catch-all (phase 2) validation may run after phase 1 if Verify+ is enabled and the file has
+     * more than 10 catch-all emails per API rules; default on the server is false.
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
@@ -321,6 +324,7 @@ object ZeroBounceSDK {
         returnUrl: String? = null,
         hasHeaderRow: Boolean = false,
         removeDuplicate: Boolean? = null,
+        allowPhase2: Boolean? = null,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -336,6 +340,7 @@ object ZeroBounceSDK {
             returnUrl = returnUrl,
             hasHeaderRow = hasHeaderRow,
             removeDuplicate = removeDuplicate,
+            allowPhase2 = allowPhase2,
             responseCallback = responseCallback,
             errorCallback = errorCallback,
         )
@@ -357,6 +362,7 @@ object ZeroBounceSDK {
         returnUrl: String? = null,
         hasHeaderRow: Boolean = false,
         removeDuplicate: Boolean? = null,
+        allowPhase2: Boolean? = null,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -372,6 +378,7 @@ object ZeroBounceSDK {
             returnUrl = returnUrl,
             hasHeaderRow = hasHeaderRow,
             removeDuplicate = removeDuplicate,
+            allowPhase2 = allowPhase2,
             responseCallback = responseCallback,
             errorCallback = errorCallback,
         )
@@ -459,6 +466,7 @@ object ZeroBounceSDK {
      * @param hasHeaderRow if the first row from the submitted file is a header row
      * @param removeDuplicate if you want the system to remove duplicate emails (true or false,
      * default on the server is true)
+     * @param allowPhase2 validation bulk only; multipart `allow_phase_2` when non-null
      * @param responseCallback the response callback
      * @param errorCallback the error callback
      */
@@ -475,6 +483,7 @@ object ZeroBounceSDK {
         ipAddressColumnIndex: Int? = null,
         hasHeaderRow: Boolean = false,
         removeDuplicate: Boolean? = null,
+        allowPhase2: Boolean? = null,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -528,6 +537,9 @@ object ZeroBounceSDK {
 
         if (removeDuplicate != null) {
             builder.addFormDataPart("remove_duplicate", "$removeDuplicate")
+        }
+        if (!scoring && allowPhase2 != null) {
+            builder.addFormDataPart("allow_phase_2", "$allowPhase2")
         }
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
@@ -583,6 +595,7 @@ object ZeroBounceSDK {
         ipAddressColumnIndex: Int? = null,
         hasHeaderRow: Boolean = false,
         removeDuplicate: Boolean? = null,
+        allowPhase2: Boolean? = null,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -605,6 +618,9 @@ object ZeroBounceSDK {
         if (ipAddressColumnIndex != null) builder.addFormDataPart("ip_address_column", "$ipAddressColumnIndex")
         builder.addFormDataPart("has_header_row", "$hasHeaderRow")
         if (removeDuplicate != null) builder.addFormDataPart("remove_duplicate", "$removeDuplicate")
+        if (!scoring && allowPhase2 != null) {
+            builder.addFormDataPart("allow_phase_2", "$allowPhase2")
+        }
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val request = Request.Builder()
@@ -710,17 +726,23 @@ object ZeroBounceSDK {
      * @param fileId the returned file ID when calling sendFile API
      * @param responseCallback the response callback
      * @param errorCallback the error callback
+     * @param downloadType optional `download_type` query value (phase_1, phase_2, combined)
+     * @param activityData if not null, sent as `activity_data` (validation bulk only)
      */
     fun getFile(
         context: Context,
         fileId: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
-        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        downloadType: ZBDownloadType? = null,
+        activityData: Boolean? = null,
     ) {
         getFileInternal(
             context = context,
             scoring = false,
             fileId = fileId,
+            downloadType = downloadType,
+            activityData = activityData,
             responseCallback = responseCallback,
             errorCallback = errorCallback
         )
@@ -734,17 +756,21 @@ object ZeroBounceSDK {
      * @param fileId the returned file ID when calling scoringSendFile API
      * @param responseCallback the response callback
      * @param errorCallback the error callback
+     * @param downloadType optional `download_type` query value (phase_1, phase_2, combined)
      */
     fun scoringGetFile(
         context: Context,
         fileId: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
-        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        downloadType: ZBDownloadType? = null,
     ) {
         getFileInternal(
             context = context,
             scoring = true,
             fileId = fileId,
+            downloadType = downloadType,
+            activityData = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
         )
@@ -765,6 +791,8 @@ object ZeroBounceSDK {
         context: Context,
         scoring: Boolean,
         fileId: String,
+        downloadType: ZBDownloadType? = null,
+        activityData: Boolean? = null,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
@@ -779,24 +807,35 @@ object ZeroBounceSDK {
         }
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
+        val downloadTypeQuery = downloadType?.let { "&download_type=${it.apiValue}" } ?: ""
+        val activityDataQuery =
+            if (!scoring && activityData != null) "&activity_data=$activityData" else ""
         val requestBuilder = Request.Builder()
-            .url("$baseUrl/getfile?api_key=$apiKey&file_id=$fileId")
+            .url("$baseUrl/getfile?api_key=$apiKey&file_id=$fileId$downloadTypeQuery$activityDataQuery")
 
         val request = requestBuilder.build()
 
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
+                val body = response.body
+
                 val fileName =
                     response.headers["content-disposition"]?.substringAfter("filename=")
                         ?.substringBefore(";")
                 val name = fileName ?: "$fileId.csv"
                 val file = File(context.getExternalFilesDir(null), "/$name")
+                val contentType = body.contentType()?.toString().orEmpty()
 
                 if (response.isSuccessful) {
                     try {
+                        // getfile may return JSON errors with HTTP 200 for unsupported download_type.
+                        if (contentType.contains("application/json", ignoreCase = true)) {
+                            errorCallback(ErrorResponse.parseError(body.string()))
+                            return
+                        }
                         FileOutputStream(file.path).use { fos ->
-                            response.body?.byteStream()?.copyTo(fos)
+                            body.byteStream().copyTo(fos)
                             fos.flush()
                             fos.close()
                         }
@@ -807,7 +846,7 @@ object ZeroBounceSDK {
                         errorCallback(ErrorResponse.parseError(e.message))
                     }
                 } else {
-                    errorCallback(ErrorResponse.parseError(response.body?.string()))
+                    errorCallback(ErrorResponse.parseError(body.string()))
                 }
             }
 

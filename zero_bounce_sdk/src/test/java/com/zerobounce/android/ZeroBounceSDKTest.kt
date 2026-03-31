@@ -1020,6 +1020,7 @@ class ZeroBounceSDKTest {
                 "    \"file_name\": \"email_file.csv\",\n" +
                 "    \"upload_date\": \"10/20/2018 4:35:58 PM\",\n" +
                 "    \"file_status\": \"Complete\",\n" +
+                "    \"file_phase_2_status\": \"N/A\",\n" +
                 "    \"complete_percentage\": \"100%\",\n" +
                 "    \"return_url\": \"Your return URL if provided when calling sendfile API\"\n" +
                 "  }"
@@ -1088,7 +1089,9 @@ class ZeroBounceSDKTest {
             }, { error ->
                 actualResponse = error
                 countDownLatch.countDown()
-            })
+            },
+            downloadType = ZBDownloadType.COMBINED,
+        )
 
         // If this is null, then the request has been made and the server must take the request.
         // Otherwise, a check error has occurred and thus, there was no need to do the request. The
@@ -1099,6 +1102,7 @@ class ZeroBounceSDKTest {
 
             // Check the API Key is not missing
             assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+            assertEquals("combined", request.requestUrl?.queryParameter("download_type"))
         }
 
         // Await for the response to be parsed
@@ -1231,6 +1235,7 @@ class ZeroBounceSDKTest {
                 "    \"file_name\": \"email_file.csv\",\n" +
                 "    \"upload_date\": \"10/20/2018 4:35:58 PM\",\n" +
                 "    \"file_status\": \"Complete\",\n" +
+                "    \"file_phase_2_status\": \"Complete\",\n" +
                 "    \"complete_percentage\": \"100%\",\n" +
                 "    \"return_url\": \"Your return URL if provided when calling sendfile API\"\n" +
                 "  }"
@@ -1299,7 +1304,9 @@ class ZeroBounceSDKTest {
             }, { error ->
                 actualResponse = error
                 countDownLatch.countDown()
-            })
+            },
+            downloadType = ZBDownloadType.PHASE_2,
+        )
 
         // If this is null, then the request has been made and the server must take the request.
         // Otherwise, a check error has occurred and thus, there was no need to do the request. The
@@ -1310,6 +1317,7 @@ class ZeroBounceSDKTest {
 
             // Check the API Key is not missing
             assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+            assertEquals("phase_2", request.requestUrl?.queryParameter("download_type"))
         }
 
         // Await for the response to be parsed
@@ -1367,6 +1375,37 @@ class ZeroBounceSDKTest {
             actualResponse,
             gson.fromJson(tempDeleteFile, ZBDeleteFileResponse::class.java)
         )
+    }
+
+    @Test
+    fun sendFile_includesAllowPhase2InMultipartWhenSet() {
+        val countDownLatch = CountDownLatch(1)
+        val file = File(ZeroBounceSDKTest::class.java.getResource("/email_file.csv")?.path!!)
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                "{\"success\":true,\"message\":\"ok\",\"file_name\":\"x.csv\",\"file_id\":\"id\"}"
+            )
+        )
+
+        ZeroBounceSDK.sendFile(
+            context = context,
+            file = file,
+            emailAddressColumnIndex = 1,
+            returnUrl = null,
+            firstNameColumnIndex = null,
+            lastNameColumnIndex = null,
+            genderColumnIndex = null,
+            ipAddressColumnIndex = null,
+            hasHeaderRow = true,
+            allowPhase2 = true,
+            responseCallback = { countDownLatch.countDown() },
+            errorCallback = { countDownLatch.countDown() },
+        )
+
+        countDownLatch.await()
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue("name=\"allow_phase_2\"" in body)
+        assertTrue(body.contains("true")) // multipart part value for allow_phase_2
     }
 
     @Test
@@ -1603,6 +1642,66 @@ class ZeroBounceSDKTest {
 
         // Test that the response from the server matches the expected response.
         assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun getFile_ReturnsJsonErrorWith200_WhenDownloadTypeUnsupported() {
+        val countDownLatch = CountDownLatch(1)
+
+        val responseJson = "{\n" +
+                "    \"success\": false,\n" +
+                "    \"message\": \"Phase 2 download types are only available when phase 2 is enabled for this file.\"\n" +
+                "}"
+        val errorResponse = ErrorResponse.parseError(responseJson)
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .addHeader("Content-Type", "application/json")
+                .setBody(responseJson)
+        )
+
+        var actualResponse: Any? = null
+
+        ZeroBounceSDK.getFile(
+            context,
+            "some-id",
+            {
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+            downloadType = ZBDownloadType.COMBINED,
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+            assertEquals("combined", request.requestUrl?.queryParameter("download_type"))
+        }
+
+        countDownLatch.await()
+        assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun getFile_includesActivityDataQueryWhenSet() {
+        val countDownLatch = CountDownLatch(1)
+        val buffer = Buffer().writeUtf8("csv")
+        server.enqueue(MockResponse().setResponseCode(200).setBody(buffer))
+
+        ZeroBounceSDK.getFile(
+            context = context,
+            fileId = "fid",
+            responseCallback = { countDownLatch.countDown() },
+            errorCallback = { countDownLatch.countDown() },
+            activityData = true,
+        )
+
+        countDownLatch.await()
+        val request = server.takeRequest()
+        assertEquals("true", request.requestUrl?.queryParameter("activity_data"))
     }
 
     @Test
