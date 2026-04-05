@@ -10,7 +10,7 @@ plugins {
 ext {
     PUBLISH_GROUP_ID = 'com.zerobounce.android'
     // Only bump this when releasing; do not use for plugins/dependencies (they have their own versions).
-    PUBLISH_VERSION = '2.0.22'
+    PUBLISH_VERSION = '2.1.0'
     PUBLISH_ARTIFACT_ID = 'zerobouncesdk'
 }
 
