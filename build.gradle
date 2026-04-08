@@ -2,7 +2,7 @@
 
 buildscript {
     // CodeQL supports Kotlin below 2.3.20; 2.3.10 is the latest 2.3.x before 2.3.20 on Maven Central.
-    ext.kotlin_version = '2.3.20'
+    ext.kotlin_version = '2.3.10'
     repositories {
         maven { url "https://plugins.gradle.org/m2/" }
         google()
