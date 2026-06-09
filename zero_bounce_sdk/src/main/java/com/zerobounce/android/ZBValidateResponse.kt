@@ -48,6 +48,10 @@ data class ZBValidateResponse(
     @SerializedName("smtp_provider")
     val smtpProvider: String? = null,
 
+    // [true/false or null] Is the domain name a catch-all (the domain email server responds with valid to any SMTP checks and emailing to an invalid might not bounce)?
+    @SerializedName("catchall_domain")
+    val catchallDomain: Boolean? = null,
+
     // The first name of the owner of the email when available or [null].
     @SerializedName("firstname")
     val firstName: String? = null,
