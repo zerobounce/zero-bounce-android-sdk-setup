@@ -429,13 +429,14 @@ Unit tests (JVM only, no emulator) can be run locally or via Docker.
 ./gradlew :zero_bounce_sdk:test
 ```
 
-**Docker:** from the **parent repository root** (where `docker-compose.yml` lives):
+**Docker:** from the **`sdk-docs/`** folder in the SDKs monorepo:
 ```bash
+cd sdk-docs
 docker compose build android
 docker compose run --rm android
 ```
 
-See the repo-wide [TESTING.md](../TESTING.md) for all SDK test commands.
+See [TESTING.md](../sdk-docs/TESTING.md) for all SDK test commands.
 
 ## Documentation
 
@@ -615,4 +616,7 @@ ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API
 
 ## Publish
 
-See the [sdk-docs (Maven Central)](../sdk-docs/maven-central/) guide in the SDKs repo for Sonatype setup and publish steps.
+1. Bump `PUBLISH_VERSION` in `zero_bounce_sdk/build.gradle`, commit, tag (`vX.Y.Z`), push tag.
+2. **Actions → Publish → Run workflow** with that tag.
+
+Registry: [com.zerobounce.android:zerobouncesdk on Maven Central](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk)
