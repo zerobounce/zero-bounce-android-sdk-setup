@@ -25,6 +25,7 @@ import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 
 /**
@@ -59,9 +60,25 @@ object ZeroBounceSDK {
      * @param apiBaseUrl the API base URL
      */
     fun initialize(apiKey: String, apiBaseUrl: String? = null) {
-        client = OkHttpClient()
+        client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
         this.apiKey = apiKey
-        apiBaseUrl?.let { this.apiBaseUrl = apiBaseUrl }
+        apiBaseUrl?.let {
+            require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
+            this.apiBaseUrl = it
+        }
+    }
+
+    internal fun isAllowedApiBaseUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        if (lower.startsWith("https://")) return true
+        // MockWebServer and local tests use loopback HTTP.
+        return lower.startsWith("http://127.0.0.1") ||
+            lower.startsWith("http://localhost") ||
+            lower.startsWith("http://[::1]")
     }
 
     /**
@@ -962,6 +979,10 @@ object ZeroBounceSDK {
         return false
     }
 
+    private fun redactSecret(value: String): String {
+        return value.replace(Regex("(?i)([?&]api_key=)[^&]*"), "$1REDACTED")
+    }
+
     /**
      * The helper method that handles any type of request.
      *
@@ -978,7 +999,7 @@ object ZeroBounceSDK {
         crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) where T : JSONConvertable {
         if (logEnabled) {
-            Log.d("ZeroBounceSDK", "request url: $url")
+            Log.d("ZeroBounceSDK", "request url: ${redactSecret(url)}")
         }
 
         val requestBuilder = Request.Builder()
