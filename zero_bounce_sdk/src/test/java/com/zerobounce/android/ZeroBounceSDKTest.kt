@@ -1927,6 +1927,15 @@ class ZeroBounceSDKTest {
         assertEquals(errorResponse, actualResponse)
     }
 
+    @Test
+    fun isAllowedApiBaseUrl_httpsAndLoopbackOnly() {
+        assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("https://api.zerobounce.net/v2"))
+        assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("http://127.0.0.1:8080/"))
+        assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("http://localhost:8080/"))
+        assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("http://evil.example/"))
+        assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("file:///etc/passwd"))
+    }
+
     @After
     fun tearDown() {
         server.shutdown()
