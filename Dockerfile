@@ -15,7 +15,7 @@ RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools \
 
 ENV PATH="${PATH}:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin"
 RUN yes | sdkmanager --licenses 2>/dev/null || true \
-    && sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+    && sdkmanager "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;37.0.0"
 
 WORKDIR /app
 
