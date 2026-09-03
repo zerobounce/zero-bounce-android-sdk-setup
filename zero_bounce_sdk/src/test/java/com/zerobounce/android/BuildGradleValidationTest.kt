@@ -8,8 +8,23 @@ import java.io.File
  * Validates that PUBLISH_VERSION is only used for the SDK version and not copy-pasted
  * onto plugin/dependency versions (same pattern as Java SDK PomValidationTest).
  * Fails during unit test run so issues are caught locally and in CI.
+ *
+ * A plugin or dependency can legitimately share a version number with the SDK by
+ * coincidence — v2.2.0 collided with Dokka 2.2.0 and mockito-kotlin 2.2.0, which
+ * failed the release even though nothing had been copy-pasted. Those coordinates are
+ * listed in [COORDINATES_ALLOWED_TO_MATCH] so the check still catches real mistakes.
+ * Adding an entry is deliberate: confirm the version is genuinely that dependency's
+ * own version and not the SDK version pasted onto it.
  */
 class BuildGradleValidationTest {
+
+    private companion object {
+        val COORDINATES_ALLOWED_TO_MATCH = listOf(
+            "org.jetbrains.dokka",
+            "org.jetbrains.dokka-javadoc",
+            "com.nhaarman.mockitokotlin2:mockito-kotlin",
+        )
+    }
 
     @Test
     fun publishVersionMustNotAppearAsOtherVersionInBuildGradle() {
@@ -22,13 +37,25 @@ class BuildGradleValidationTest {
             ?: throw AssertionError("PUBLISH_VERSION not found in build.gradle")
 
         val publishVersion = match.groupValues[1]
-        // Remove the defining line; rest of file must not contain this version as a standalone version (copy-paste mistake)
-        val withoutDefiningLine = content.replaceFirst(match.value, "")
-        val mistaken = publishVersion.toRegex().findAll(withoutDefiningLine).count()
+
+        // Check line by line so a violation can be reported with the line that caused it,
+        // and so an allowlisted coordinate only exempts its own line.
+        val offenders = content.lineSequence()
+            .withIndex()
+            .filter { (_, line) -> line.contains(publishVersion) }
+            .filterNot { (_, line) -> versionRegex.containsMatchIn(line) }
+            .filterNot { (_, line) ->
+                COORDINATES_ALLOWED_TO_MATCH.any { line.contains(it) }
+            }
+            .map { (index, line) -> "  line ${index + 1}: ${line.trim()}" }
+            .toList()
 
         assertTrue(
-            "PUBLISH_VERSION ($publishVersion) must not appear elsewhere in build.gradle (copy-paste causes wrong plugin/dep versions). Found $mistaken other occurrence(s). Only bump PUBLISH_VERSION in ext {}.",
-            mistaken == 0
+            "PUBLISH_VERSION ($publishVersion) must not appear elsewhere in build.gradle " +
+                "(copy-paste causes wrong plugin/dep versions). Only bump PUBLISH_VERSION in ext {}. " +
+                "If one of these is genuinely that dependency's own version, add its coordinate to " +
+                "COORDINATES_ALLOWED_TO_MATCH in this test.\n" + offenders.joinToString("\n"),
+            offenders.isEmpty()
         )
     }
 
