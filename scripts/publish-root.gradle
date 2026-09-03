@@ -1,11 +1,20 @@
-// Create variables with empty default values
+// Credentials for signing and for the Sonatype Central Portal.
+//
+// Publishing goes to the Central Portal (https://central.sonatype.com), the same
+// destination the Java SDK uses via central-publishing-maven-plugin. The legacy
+// OSSRH staging API this project used before (ossrh-staging-api.central.sonatype.com,
+// driven by io.github.gradle-nexus:publish-plugin) began returning
+// "400 Failed to process request: dispatch failure" and is being retired, so the
+// release now assembles a bundle locally and uploads it to the Portal API.
+//
+// SONATYPE_STAGING_PROFILE_ID is no longer used: staging profiles are an OSSRH
+// concept and the Portal has no equivalent.
+
 ext["signing.keyId"] = ''
 ext["signing.password"] = ''
 ext["signing.key"] = ''
 ext["centralTokenUsername"] = ''
 ext["centralTokenPassword"] = ''
-ext["sonatypeStagingProfileId"] = ''
-
 
 File secretPropsFile = project.rootProject.file('local.properties')
 
@@ -18,21 +27,22 @@ if (secretPropsFile.exists()) {
     // Use system environment variables
     ext["centralTokenUsername"] = System.getenv('CENTRAL_TOKEN_USERNAME')
     ext["centralTokenPassword"] = System.getenv('CENTRAL_TOKEN_PASSWORD')
-    ext["sonatypeStagingProfileId"] = System.getenv('SONATYPE_STAGING_PROFILE_ID')
     ext["signing.keyId"] = System.getenv('SIGNING_KEY_ID')
     ext["signing.password"] = System.getenv('SIGNING_PASSWORD')
     ext["signing.key"] = System.getenv('SIGNING_KEY')
 }
 
-// Set up Sonatype repository
-nexusPublishing {
-    repositories {
-        sonatype {
-            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
-            stagingProfileId = sonatypeStagingProfileId
-            username = centralTokenUsername
-            password = centralTokenPassword
-        }
-    }
+// Directory the module publishes into, laid out as a Maven repository. This is what
+// the Portal bundle is built from; nothing is uploaded by Gradle itself.
+ext["centralStagingDir"] = layout.buildDirectory.dir("central-staging")
+
+// Packs the staged artifacts into the single zip the Portal upload endpoint expects.
+// maven-metadata files are deliberately excluded: the Portal rejects bundles
+// containing them, and Gradle writes them when publishing to a Maven repository.
+tasks.register('centralBundle', Zip) {
+    dependsOn ':zero_bounce_sdk:publishReleasePublicationToCentralStagingRepository'
+    archiveFileName.set('central-bundle.zip')
+    destinationDirectory.set(layout.buildDirectory)
+    from centralStagingDir
+    exclude '**/maven-metadata*'
 }

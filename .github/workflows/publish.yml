@@ -57,15 +57,44 @@ jobs:
       - name: Generate release build
         run: ./gradlew :zero_bounce_sdk:assembleRelease
 
-      - name: Publish to Maven Central
-        run: ./gradlew publishReleasePublicationToSonatypeRepository --max-workers 1 closeAndReleaseSonatypeStagingRepository
+      # Signs the artifacts and stages them into build/central-staging, then zips
+      # build/central-bundle.zip. Nothing leaves the runner in this step.
+      - name: Build Central Portal bundle
+        run: ./gradlew centralBundle --max-workers 1
         env:
-          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
-          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
           SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          SONATYPE_STAGING_PROFILE_ID: ${{ secrets.SONATYPE_STAGING_PROFILE_ID }}
+
+      # Uploads to the Sonatype Central Portal, the same destination the Java SDK
+      # publishes to. publishingType=AUTOMATIC matches the Java SDK's autoPublish=true,
+      # so a bundle that passes validation is released without a manual step.
+      - name: Publish to Maven Central
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ ! -f build/central-bundle.zip ]; then
+            echo "Error: build/central-bundle.zip was not produced."
+            exit 1
+          fi
+          AUTH=$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w0)
+          HTTP=$(curl --silent --show-error --output response.txt --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $AUTH" \
+            --form "bundle=@build/central-bundle.zip" \
+            "https://central.sonatype.com/api/v1/publisher/upload?name=zerobouncesdk-${TAG}&publishingType=AUTOMATIC")
+          echo "HTTP $HTTP"
+          echo "Response: $(cat response.txt)"
+          # The Portal returns 201 with a deployment id when the bundle is accepted.
+          if [ "$HTTP" != "201" ]; then
+            echo "Error: Central Portal rejected the upload."
+            exit 1
+          fi
+          echo "Deployment accepted. Validation and release happen asynchronously;"
+          echo "check https://central.sonatype.com/publishing/deployments if it does not appear."
 
   release:
     name: Create GitHub Release

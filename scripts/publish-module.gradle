@@ -12,6 +12,14 @@ version = PUBLISH_VERSION
 
 afterEvaluate {
     publishing {
+        // Publish into a local Maven-layout directory; the root project's
+        // centralBundle task zips it for upload to the Sonatype Central Portal.
+        repositories {
+            maven {
+                name = "centralStaging"
+                url = rootProject.ext["centralStagingDir"]
+            }
+        }
         publications {
             release(MavenPublication) {
                 groupId PUBLISH_GROUP_ID
