@@ -302,6 +302,24 @@ internal class Priority3Api {
         )
     }
 
+    fun listS3Files(
+        bucket: String?,
+        search: String?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val key = ZeroBounceSDK.priority3ApiKey() ?: return
+        val params = mutableMapOf("api_key" to key)
+        if (!bucket.isNullOrBlank()) params["bucket"] = bucket
+        if (!search.isNullOrBlank()) params["search"] = search
+        ZeroBounceSDK.priority3GetJson(
+            "${ZeroBounceSDK.priority3BulkApiRootUrl()}/listS3files",
+            params,
+            responseCallback,
+            errorCallback,
+        )
+    }
+
     fun validateS3File(
         options: ZBValidateS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,

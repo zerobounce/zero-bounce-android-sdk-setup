@@ -10,4 +10,6 @@ data class ZBValidateOptions(
     val activityData: Boolean? = null,
     /** Maps to verify_plus. */
     val verifyPlus: Boolean? = null,
+    /** When true, uses form-encoded POST for /validate. */
+    val usePost: Boolean = false,
 )

@@ -124,6 +124,24 @@ object ZeroBounceSDK {
         if (options != null && !checkValidateTimeout(options.timeout, errorCallback)) return
 
         val ipAddressPart = ipAddress ?: ""
+        if (options?.usePost == true) {
+            val key = apiKey ?: return
+            val fields = mutableMapOf(
+                "api_key" to key,
+                "email" to email,
+                "ip_address" to ipAddressPart,
+            )
+            options.timeout?.let { fields["timeout"] = it.toString() }
+            options.activityData?.let { fields["activity_data"] = if (it) "true" else "false" }
+            options.verifyPlus?.let { fields["verify_plus"] = if (it) "true" else "false" }
+            requestFormPost(
+                url = "$apiBaseUrl/validate",
+                formFields = fields,
+                responseCallback = responseCallback,
+                errorCallback = errorCallback
+            )
+            return
+        }
         var url =
             "$apiBaseUrl/validate?api_key=$apiKey&email=${enc(email)}&ip_address=${enc(ipAddressPart)}"
         if (options != null) {
@@ -1222,6 +1240,16 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
         priority3Api.deleteFilter(rule, target, value, responseCallback, errorCallback)
+    }
+
+    fun listS3Files(
+        bucket: String? = null,
+        search: String? = null,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.listS3Files(bucket, search, responseCallback, errorCallback)
     }
 
     fun validateS3File(
