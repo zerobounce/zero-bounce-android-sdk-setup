@@ -32,6 +32,12 @@ data class ZBValidateResponse(
     @SerializedName("domain_age_days")
     val domainAgeDays: String? = null,
 
+    @SerializedName("active_in_days")
+    val activeInDays: String? = null,
+
+    @SerializedName("active_first_seen")
+    val activeFirstSeen: String? = null,
+
     // [true/false] If the email comes from a free provider.
     @SerializedName("free_email")
     val freeEmail: Boolean = false,

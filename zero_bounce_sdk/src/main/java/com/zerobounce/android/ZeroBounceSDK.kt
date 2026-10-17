@@ -101,11 +101,36 @@ object ZeroBounceSDK {
         responseCallback: (response: ZBValidateResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
+        validate(email, ipAddress, null, responseCallback, errorCallback)
+    }
+
+    /**
+     * Validates the given [email] with optional v2 query parameters.
+     */
+    fun validate(
+        email: String,
+        ipAddress: String?,
+        options: ZBValidateOptions?,
+        responseCallback: (response: ZBValidateResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
         if (invalidApiKey(errorCallback)) return
+        if (options != null && !checkValidateTimeout(options.timeout, errorCallback)) return
 
         val ipAddressPart = ipAddress ?: ""
+        var url =
+            "$apiBaseUrl/validate?api_key=$apiKey&email=${enc(email)}&ip_address=${enc(ipAddressPart)}"
+        if (options != null) {
+            options.timeout?.let { url += "&timeout=${enc(it.toString())}" }
+            options.activityData?.let {
+                url += "&activity_data=${enc(if (it) "true" else "false")}"
+            }
+            options.verifyPlus?.let {
+                url += "&verify_plus=${enc(if (it) "true" else "false")}"
+            }
+        }
         request(
-            url = "$apiBaseUrl/validate?api_key=$apiKey&email=${enc(email)}&ip_address=${enc(ipAddressPart)}",
+            url = url,
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
@@ -124,13 +149,29 @@ object ZeroBounceSDK {
         responseCallback: (response: ZBValidateBatchResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
+        validateBatch(emails, null, responseCallback, errorCallback)
+    }
+
+    /**
+     * Validates a batch of emails with optional v2 body parameters.
+     */
+    fun validateBatch(
+        emails: List<ZBValidateBatchData>,
+        options: ZBValidateOptions?,
+        responseCallback: (response: ZBValidateBatchResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
         if (invalidApiKey(errorCallback)) return
         val apiKey = apiKey ?: return
+        if (options != null && !checkValidateBatchTimeout(options.timeout, errorCallback)) return
 
-        val body = mapOf(
+        val body = mutableMapOf<String, Any>(
             "api_key" to apiKey,
             "email_batch" to emails
         )
+        options?.timeout?.let { body["timeout"] = it }
+        options?.activityData?.let { body["activity_data"] = it }
+        options?.verifyPlus?.let { body["verify_plus"] = it }
 
         request(
             url = "$apiBaseUrl/validatebatch",
@@ -138,6 +179,28 @@ object ZeroBounceSDK {
             responseCallback = responseCallback,
             errorCallback = errorCallback
         )
+    }
+
+    private fun checkValidateTimeout(
+        timeout: Int?,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ): Boolean {
+        if (timeout == null || timeout in 3..60) return true
+        errorCallback(
+            ErrorResponse.parseError("Invalid parameter: timeout (must be between 3 and 60 seconds)")
+        )
+        return false
+    }
+
+    private fun checkValidateBatchTimeout(
+        timeout: Int?,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ): Boolean {
+        if (timeout == null || timeout in 10..120) return true
+        errorCallback(
+            ErrorResponse.parseError("Invalid parameter: timeout (must be between 10 and 120 seconds)")
+        )
+        return false
     }
 
     /**

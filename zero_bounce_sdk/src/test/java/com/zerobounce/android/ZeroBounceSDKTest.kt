@@ -120,6 +120,28 @@ class ZeroBounceSDKTest {
     }
 
     @Test
+    fun validateEmail_WithOptions_SendsQueryParams() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson =
+            "{\"address\":\"flowerjill@aol.com\",\"status\":\"valid\",\"sub_status\":\"\",\"processed_at\":\"2017-04-01 02:48:02.592\"}"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        ZeroBounceSDK.validate(
+            "flowerjill@aol.com",
+            null,
+            ZBValidateOptions(timeout = 30, activityData = true, verifyPlus = false),
+            { countDownLatch.countDown() },
+            { countDownLatch.countDown() }
+        )
+
+        val request = server.takeRequest()
+        countDownLatch.await()
+        assertEquals("30", request.requestUrl?.queryParameter("timeout"))
+        assertEquals("true", request.requestUrl?.queryParameter("activity_data"))
+        assertEquals("false", request.requestUrl?.queryParameter("verify_plus"))
+    }
+
+    @Test
     fun validateEmail_ReturnsError() {
         val countDownLatch = CountDownLatch(1)
 
