@@ -22,4 +22,7 @@ WORKDIR /app
 COPY . .
 
 # Run unit tests for the SDK library only (no emulator)
+
+USER 65532:65532
+
 CMD ["./gradlew", ":zero_bounce_sdk:test", "--no-daemon", "-q"]
