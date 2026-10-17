@@ -1950,6 +1950,75 @@ class ZeroBounceSDKTest {
     }
 
     @Test
+    fun scoreEmail_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"email\":\"mark@gmail.com\",\"score\":10}"
+        val expectedResponse = gson.fromJson(responseJson, ZBScoreEmailResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        ZeroBounceSDK.scoreEmail(
+            "mark@gmail.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            }
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+            assertEquals("mark@gmail.com", request.requestUrl?.queryParameter("email"))
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/scoring") == true)
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        assertTrue(actualResponse is ZBScoreEmailResponse)
+    }
+
+    @Test
+    fun scoreEmailPost_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"email\":\"mark@gmail.com\",\"score\":10}"
+        val expectedResponse = gson.fromJson(responseJson, ZBScoreEmailResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        ZeroBounceSDK.scoreEmailPost(
+            "mark@gmail.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            }
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/scoring") == true)
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("api_key=$API_KEY"))
+            assertTrue(body.contains("email=mark%40gmail.com") || body.contains("email=mark@gmail.com"))
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        assertTrue(actualResponse is ZBScoreEmailResponse)
+    }
+
+    @Test
     fun isAllowedApiBaseUrl_httpsAndLoopbackOnly() {
         assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("https://api.zerobounce.net/v2"))
         assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("http://127.0.0.1:8080/"))

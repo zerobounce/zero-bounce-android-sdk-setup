@@ -10,6 +10,7 @@ import com.google.gson.GsonBuilder
 import com.zerobounce.android.ZeroBounceSDK.apiKey
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -1025,6 +1026,43 @@ object ZeroBounceSDK {
     }
 
     /**
+     * Real-time AI scoring for a single email (GET /scoring).
+     */
+    fun scoreEmail(
+        email: String,
+        responseCallback: (response: ZBScoreEmailResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+
+        request(
+            url = "$apiBaseUrl/scoring?api_key=$apiKey&email=${enc(email)}",
+            body = null,
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
+     * Real-time AI scoring for a single email (POST /scoring, form-encoded).
+     */
+    fun scoreEmailPost(
+        email: String,
+        responseCallback: (response: ZBScoreEmailResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        val key = apiKey ?: return
+
+        requestFormPost(
+            url = "$apiBaseUrl/scoring",
+            formFields = mapOf("api_key" to key, "email" to email),
+            responseCallback = responseCallback,
+            errorCallback = errorCallback
+        )
+    }
+
+    /**
      * Checks if the [apiKey] is invalid or not and if it is, then it throws an error through
      * the provided [errorCallback].
      *
@@ -1078,6 +1116,51 @@ object ZeroBounceSDK {
 
         val call = client.newCall(request)
         call.enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (logEnabled) {
+                    Log.d("ZeroBounceSDK", "response: $json")
+                }
+
+                if (response.isSuccessful) {
+                    try {
+                        val rsp = json?.toObject<T>()
+                        responseCallback(rsp)
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    private inline fun <reified T> requestFormPost(
+        url: String,
+        formFields: Map<String, String>,
+        crossinline responseCallback: (response: T?) -> Unit,
+        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit
+    ) where T : JSONConvertable {
+        if (logEnabled) {
+            Log.d("ZeroBounceSDK", "request url: ${redactSecret(url)}")
+        }
+
+        val formBuilder = FormBody.Builder()
+        for ((name, value) in formFields) {
+            formBuilder.add(name, value)
+        }
+
+        val request = Request.Builder()
+            .url(url)
+            .post(formBuilder.build())
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
                 if (logEnabled) {
