@@ -48,6 +48,7 @@ class ZeroBounceSDKTest {
         // Prepare the server's url and overwrite the ZeroBounceSDK's base url
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()
+        ZeroBounceSDK.bulkApiRootUrl = server.url("/").toString()
         ZeroBounceSDK.initialize(API_KEY, apiBaseUrl = server.url("/").toString())
     }
 
@@ -2016,6 +2017,106 @@ class ZeroBounceSDKTest {
         countDownLatch.await()
         assertEquals(expectedResponse, actualResponse)
         assertTrue(actualResponse is ZBScoreEmailResponse)
+    }
+
+    @Test
+    fun sendEmailFinderFile_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true,\"file_id\":\"f1\",\"file_name\":\"out.csv\"}"
+        val expectedResponse = gson.fromJson(responseJson, ZBSendFileResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        val csvFile = File.createTempFile("finder", ".csv")
+        csvFile.writeText("domain,name\nacme.com,Jane\n")
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.sendEmailFinderFile(
+            csvFile,
+            1,
+            null,
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.contains("email-finder") == true)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/sendfile") == true)
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        csvFile.delete()
+    }
+
+    @Test
+    fun validateS3File_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true,\"file_id\":\"s3-1\"}"
+        val expectedResponse = gson.fromJson(responseJson, ZBSendFileResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.validateS3File(
+            ZBValidateS3FileOptions(fileName = "bucket/key.csv"),
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/validateS3file") == true)
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("file_name=bucket%2Fkey.csv") || body.contains("file_name=bucket/key.csv"))
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+    }
+
+    @Test
+    fun addFilter_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true}"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.addFilter(
+            "allow",
+            "email",
+            "user@example.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/filters/add") == true)
+        }
+
+        countDownLatch.await()
+        assertTrue(actualResponse is com.google.gson.JsonElement)
     }
 
     @Test

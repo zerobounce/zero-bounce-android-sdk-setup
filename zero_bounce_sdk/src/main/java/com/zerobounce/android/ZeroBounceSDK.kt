@@ -7,6 +7,8 @@ import android.util.Log
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import com.zerobounce.android.ZeroBounceSDK.apiKey
 import okhttp3.Call
 import okhttp3.Callback
@@ -41,6 +43,9 @@ object ZeroBounceSDK {
     internal var apiBaseUrl = "https://api.zerobounce.net/v2"
     internal var bulkApiBaseUrl = "https://bulkapi.zerobounce.net/v2"
     internal var bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.net/v2/scoring"
+    internal var bulkApiRootUrl = "https://bulkapi.zerobounce.net"
+
+    private val priority3Api = Priority3Api()
 
     private const val READ_EXTERNAL_STORAGE = Manifest.permission.READ_EXTERNAL_STORAGE
     private const val WRITE_EXTERNAL_STORAGE = Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -1025,6 +1030,228 @@ object ZeroBounceSDK {
         )
     }
 
+    // Priority 3 — bulk email finder, domain search, list evaluator, filters, S3
+
+    fun sendEmailFinderFile(
+        file: File,
+        domainColumn: Int,
+        options: ZBEmailFinderSendFileOptions? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendEmailFinderFile(file, domainColumn, options, responseCallback, errorCallback)
+    }
+
+    fun sendEmailFinderFileStream(
+        inputStream: InputStream,
+        fileName: String,
+        domainColumn: Int,
+        options: ZBEmailFinderSendFileOptions? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendEmailFinderFileStream(
+            inputStream,
+            fileName,
+            domainColumn,
+            options,
+            responseCallback,
+            errorCallback,
+        )
+    }
+
+    fun emailFinderFileStatus(
+        fileId: String,
+        responseCallback: (response: ZBFileStatusResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootFileStatus(priority3EmailFinderBaseUrl(), fileId, responseCallback, errorCallback)
+    }
+
+    fun emailFinderGetFile(
+        fileId: String,
+        downloadPath: String,
+        responseCallback: (response: ZBGetFileResponse) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootGetFile(priority3EmailFinderBaseUrl(), fileId, downloadPath, responseCallback, errorCallback)
+    }
+
+    fun emailFinderDeleteFile(
+        fileId: String,
+        responseCallback: (response: ZBDeleteFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootDeleteFile(priority3EmailFinderBaseUrl(), fileId, responseCallback, errorCallback)
+    }
+
+    fun sendDomainSearchFile(
+        file: File,
+        domainColumn: Int,
+        options: ZBDomainSearchSendFileOptions? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendDomainSearchFile(file, domainColumn, options, responseCallback, errorCallback)
+    }
+
+    fun sendDomainSearchFileStream(
+        inputStream: InputStream,
+        fileName: String,
+        domainColumn: Int,
+        options: ZBDomainSearchSendFileOptions? = null,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendDomainSearchFileStream(
+            inputStream,
+            fileName,
+            domainColumn,
+            options,
+            responseCallback,
+            errorCallback,
+        )
+    }
+
+    fun domainSearchFileStatus(
+        fileId: String,
+        responseCallback: (response: ZBFileStatusResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootFileStatus(priority3DomainSearchBaseUrl(), fileId, responseCallback, errorCallback)
+    }
+
+    fun domainSearchGetFile(
+        fileId: String,
+        downloadPath: String,
+        responseCallback: (response: ZBGetFileResponse) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootGetFile(priority3DomainSearchBaseUrl(), fileId, downloadPath, responseCallback, errorCallback)
+    }
+
+    fun domainSearchDeleteFile(
+        fileId: String,
+        responseCallback: (response: ZBDeleteFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.bulkRootDeleteFile(priority3DomainSearchBaseUrl(), fileId, responseCallback, errorCallback)
+    }
+
+    fun sendListEvaluatorFile(
+        file: File,
+        emailAddressColumn: Int,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendListEvaluatorFile(file, emailAddressColumn, responseCallback, errorCallback)
+    }
+
+    fun sendListEvaluatorFileStream(
+        inputStream: InputStream,
+        fileName: String,
+        emailAddressColumn: Int,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendListEvaluatorFileStream(
+            inputStream,
+            fileName,
+            emailAddressColumn,
+            responseCallback,
+            errorCallback,
+        )
+    }
+
+    fun getListEvaluatorResult(
+        fileId: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.getListEvaluatorResult(fileId, responseCallback, errorCallback)
+    }
+
+    fun sendEvaluatedFile(
+        file: File,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.sendEvaluatedFile(file, responseCallback, errorCallback)
+    }
+
+    fun addFilter(
+        rule: String,
+        target: String,
+        value: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.addFilter(rule, target, value, responseCallback, errorCallback)
+    }
+
+    fun listFilters(
+        usePost: Boolean,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.listFilters(usePost, responseCallback, errorCallback)
+    }
+
+    fun deleteFilter(
+        rule: String,
+        target: String,
+        value: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.deleteFilter(rule, target, value, responseCallback, errorCallback)
+    }
+
+    fun validateS3File(
+        options: ZBValidateS3FileOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.validateS3File(options, responseCallback, errorCallback)
+    }
+
+    fun scoreS3File(
+        options: ZBScoreS3FileOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.scoreS3File(options, responseCallback, errorCallback)
+    }
+
+    fun exportS3File(
+        fileId: String,
+        exportBucket: String,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.exportS3File(fileId, exportBucket, responseCallback, errorCallback)
+    }
+
     /**
      * Real-time AI scoring for a single email (GET /scoring).
      */
@@ -1224,5 +1451,186 @@ object ZeroBounceSDK {
             }
         }
         return hasAllPermissions
+    }
+
+    internal fun priority3ApiKey(): String? = apiKey
+
+    internal fun priority3ApiBaseUrl(): String = apiBaseUrl
+
+    internal fun priority3BulkApiBaseUrl(): String = bulkApiBaseUrl
+
+    internal fun priority3BulkApiRootUrl(): String = bulkApiRootUrl
+
+    internal fun priority3EmailFinderBaseUrl(): String = "$bulkApiRootUrl/email-finder"
+
+    internal fun priority3DomainSearchBaseUrl(): String = "$bulkApiRootUrl/domain-search"
+
+    internal fun encQuery(value: String): String = enc(value)
+
+    internal fun priority3Client(): OkHttpClient = client
+
+    internal fun <T : JSONConvertable> priority3Get(
+        urlPath: String,
+        queryParameters: Map<String, String>,
+        responseClass: Class<T>,
+        responseCallback: (response: T?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val query = queryParameters.entries.joinToString("&") { (k, v) ->
+            "${enc(k)}=${enc(v)}"
+        }
+        val url = if (query.isEmpty()) urlPath else "$urlPath?$query"
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (response.isSuccessful) {
+                    try {
+                        val rsp = gson.fromJson(json, responseClass)
+                        responseCallback(rsp)
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    internal fun priority3GetJson(
+        urlPath: String,
+        queryParameters: Map<String, String>,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val query = queryParameters.entries.joinToString("&") { (k, v) ->
+            "${enc(k)}=${enc(v)}"
+        }
+        val url = if (query.isEmpty()) urlPath else "$urlPath?$query"
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (response.isSuccessful) {
+                    try {
+                        val rsp = JsonParser.parseString(json)
+                        responseCallback(rsp)
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    internal fun priority3FormPostJson(
+        url: String,
+        formFields: Map<String, String>,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val formBuilder = FormBody.Builder()
+        for ((name, value) in formFields) {
+            formBuilder.add(name, value)
+        }
+        val request = Request.Builder().url(url).post(formBuilder.build()).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (response.isSuccessful) {
+                    try {
+                        responseCallback(JsonParser.parseString(json))
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    internal fun priority3FormPost(
+        url: String,
+        formFields: Map<String, String>,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        requestFormPost(url, formFields, responseCallback, errorCallback)
+    }
+
+    internal fun priority3EnqueueMultipart(
+        url: String,
+        body: MultipartBody,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val request = Request.Builder().url(url).post(body).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                if (response.isSuccessful) {
+                    try {
+                        responseCallback(json?.toObject<ZBSendFileResponse>())
+                    } catch (_: Throwable) {
+                        errorCallback(ErrorResponse.parseError(json))
+                    }
+                } else {
+                    errorCallback(ErrorResponse.parseError(json))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    internal fun priority3RawDownloadCallback(
+        downloadPath: String,
+        responseCallback: (response: ZBGetFileResponse) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): Callback = object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            response.use {
+                val bodyBytes = it.body?.bytes() ?: run {
+                    errorCallback(ErrorResponse.parseError("Empty response body"))
+                    return
+                }
+                if (!it.isSuccessful) {
+                    errorCallback(ErrorResponse.parseError(String(bodyBytes, Charsets.UTF_8)))
+                    return
+                }
+                val bodyStr = String(bodyBytes, Charsets.UTF_8).trim()
+                if (Priority3Api.looksLikeJsonError(bodyStr)) {
+                    errorCallback(ErrorResponse.parseError(bodyStr))
+                    return
+                }
+                try {
+                    responseCallback(Priority3Api.writeDownloadFile(downloadPath, bodyBytes))
+                } catch (e: IOException) {
+                    errorCallback(ErrorResponse.parseError(e.message))
+                }
+            }
+        }
+
+        override fun onFailure(call: Call, e: IOException) {
+            errorCallback(ErrorResponse.parseError(e.message))
+        }
     }
 }
