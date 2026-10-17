@@ -10,6 +10,7 @@ import com.google.gson.GsonBuilder
 import com.zerobounce.android.ZeroBounceSDK.apiKey
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -22,6 +23,7 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,11 +77,15 @@ object ZeroBounceSDK {
     internal fun isAllowedApiBaseUrl(url: String): Boolean {
         val lower = url.lowercase()
         if (lower.startsWith("https://")) return true
-        // MockWebServer and local tests use loopback HTTP.
-        return lower.startsWith("http://127.0.0.1") ||
-            lower.startsWith("http://localhost") ||
-            lower.startsWith("http://[::1]")
+        if (!lower.startsWith("http://")) return false
+        val host = url.toHttpUrlOrNull()?.host ?: return false
+        return host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
+
+    private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
+
+    internal fun safeFileName(raw: String?): String? =
+        raw?.substringAfterLast('/')?.takeIf { it.isNotBlank() && it != "." && it != ".." }
 
     /**
      * Validates the given [email].
@@ -99,7 +105,7 @@ object ZeroBounceSDK {
 
         val ipAddressPart = ipAddress ?: ""
         request(
-            url = "$apiBaseUrl/validate?api_key=$apiKey&email=$email&ip_address=$ipAddressPart",
+            url = "$apiBaseUrl/validate?api_key=$apiKey&email=${enc(email)}&ip_address=${enc(ipAddressPart)}",
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
@@ -161,10 +167,10 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
 
-        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&domain=$domain"
-        firstName?.let { url += "&first_name=$firstName" }
-        middleName?.let { url += "&middle_name=$middleName" }
-        lastName?.let { url += "&last_name=$lastName" }
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&domain=${enc(domain)}"
+        firstName?.let { url += "&first_name=${enc(firstName)}" }
+        middleName?.let { url += "&middle_name=${enc(middleName)}" }
+        lastName?.let { url += "&last_name=${enc(lastName)}" }
 
         request(
             url = url,
@@ -207,11 +213,11 @@ object ZeroBounceSDK {
             return
         }
 
-        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&first_name=$firstName"
-        domain?.let { url += "&domain=$domain" }
-        companyName?.let { url += "&company_name=$companyName" }
-        middleName?.let { url += "&middle_name=$middleName" }
-        lastName?.let { url += "&last_name=$lastName" }
+        var url = "$apiBaseUrl/guessformat?api_key=$apiKey&first_name=${enc(firstName)}"
+        domain?.let { url += "&domain=${enc(domain)}" }
+        companyName?.let { url += "&company_name=${enc(companyName)}" }
+        middleName?.let { url += "&middle_name=${enc(middleName)}" }
+        lastName?.let { url += "&last_name=${enc(lastName)}" }
 
         request(
             url = url,
@@ -248,8 +254,8 @@ object ZeroBounceSDK {
         }
 
         var url = "$apiBaseUrl/guessformat?api_key=$apiKey"
-        domain?.let { url += "&domain=$domain" }
-        companyName?.let { url += "&company_name=$companyName" }
+        domain?.let { url += "&domain=${enc(domain)}" }
+        companyName?.let { url += "&company_name=${enc(companyName)}" }
 
         request(
             url = url,
@@ -279,7 +285,7 @@ object ZeroBounceSDK {
         val eDate = dateFormat.format(endDate)
 
         request(
-            url = "$apiBaseUrl/getapiusage?api_key=$apiKey&start_date=$sDate&end_date=$eDate",
+            url = "$apiBaseUrl/getapiusage?api_key=$apiKey&start_date=${enc(sDate)}&end_date=${enc(eDate)}",
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
@@ -728,7 +734,7 @@ object ZeroBounceSDK {
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         request(
-            url = "$baseUrl/filestatus?api_key=$apiKey&file_id=$fileId",
+            url = "$baseUrl/filestatus?api_key=$apiKey&file_id=${enc(fileId)}",
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback
@@ -815,55 +821,49 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
 
-        if (!hasPermissions(context, STORAGE_PERMISSIONS)) {
-            val errorResponse = ErrorResponse.parseError(
-                "Cannot send file, permissions $READ_EXTERNAL_STORAGE and $WRITE_EXTERNAL_STORAGE are not granted"
-            )
-            errorCallback(errorResponse)
-            return
-        }
-
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val downloadTypeQuery = downloadType?.let { "&download_type=${it.apiValue}" } ?: ""
         val activityDataQuery =
             if (!scoring && activityData != null) "&activity_data=$activityData" else ""
         val requestBuilder = Request.Builder()
-            .url("$baseUrl/getfile?api_key=$apiKey&file_id=$fileId$downloadTypeQuery$activityDataQuery")
+            .url("$baseUrl/getfile?api_key=$apiKey&file_id=${enc(fileId)}$downloadTypeQuery$activityDataQuery")
 
         val request = requestBuilder.build()
 
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val body = response.body
-
-                val fileName =
-                    response.headers["content-disposition"]?.substringAfter("filename=")
-                        ?.substringBefore(";")
-                val name = fileName ?: "$fileId.csv"
-                val file = File(context.getExternalFilesDir(null), "/$name")
-                val contentType = body.contentType()?.toString().orEmpty()
-
-                if (response.isSuccessful) {
-                    try {
-                        // getfile may return JSON errors with HTTP 200 for unsupported download_type.
-                        if (contentType.contains("application/json", ignoreCase = true)) {
-                            errorCallback(ErrorResponse.parseError(body.string()))
-                            return
-                        }
-                        FileOutputStream(file.path).use { fos ->
-                            body.byteStream().copyTo(fos)
-                            fos.flush()
-                            fos.close()
-                        }
-                        responseCallback(ZBGetFileResponse(file.path))
-                    } catch (e: FileNotFoundException) {
-                        errorCallback(ErrorResponse.parseError(e.message))
-                    } catch (e: IOException) {
-                        errorCallback(ErrorResponse.parseError(e.message))
+                response.use {
+                    val body = it.body ?: run {
+                        errorCallback(ErrorResponse.parseError("Empty response body"))
+                        return
                     }
-                } else {
-                    errorCallback(ErrorResponse.parseError(body.string()))
+
+                    val fileName =
+                        it.headers["content-disposition"]?.substringAfter("filename=")
+                            ?.substringBefore(";")
+                    val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
+                    val file = File(context.getExternalFilesDir(null), name)
+                    val contentType = body.contentType()?.toString().orEmpty()
+
+                    if (it.isSuccessful) {
+                        try {
+                            if (contentType.contains("application/json", ignoreCase = true)) {
+                                errorCallback(ErrorResponse.parseError(body.string()))
+                                return@use
+                            }
+                            FileOutputStream(file.path).use { fos ->
+                                body.byteStream().copyTo(fos)
+                            }
+                            responseCallback(ZBGetFileResponse(file.path))
+                        } catch (e: FileNotFoundException) {
+                            errorCallback(ErrorResponse.parseError(e.message))
+                        } catch (e: IOException) {
+                            errorCallback(ErrorResponse.parseError(e.message))
+                        }
+                    } else {
+                        errorCallback(ErrorResponse.parseError(body.string()))
+                    }
                 }
             }
 
@@ -931,7 +931,7 @@ object ZeroBounceSDK {
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         request(
-            url = "$baseUrl/deletefile?api_key=$apiKey&file_id=$fileId",
+            url = "$baseUrl/deletefile?api_key=$apiKey&file_id=${enc(fileId)}",
             body = null,
             responseCallback = successCallback,
             errorCallback = errorCallback
@@ -954,7 +954,7 @@ object ZeroBounceSDK {
         if (invalidApiKey(errorCallback)) return
 
         request(
-            url = "$apiBaseUrl/activity?api_key=$apiKey&email=$email",
+            url = "$apiBaseUrl/activity?api_key=$apiKey&email=${enc(email)}",
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback

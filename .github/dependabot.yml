@@ -1,54 +1,60 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#versioning-strategy
+# Dependabot: security updates only (no version-update PRs).
+# Grouped security PRs open weekly on Tuesday morning (Europe/Bucharest).
+# Auto-merge: .github/workflows/dependabot-auto-merge.yml (on PR + Tuesday cron).
+# https://docs.github.com/en/code-security/dependabot/dependabot-security-updates
 
 version: 2
 updates:
-  # Keep the Android dependencies up to date
-  - package-ecosystem: "gradle" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "gradle"
+    directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    target-branch: "master"
+      interval: weekly
+      day: tuesday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 0
     labels:
+      - "dependabot-security"
       - "android dependencies"
     ignore:
-      # CodeQL java-kotlin analysis supports Kotlin below 2.3.30
       - dependency-name: "org.jetbrains.kotlin:kotlin-gradle-plugin"
         versions: [">= 2.3.30"]
     groups:
-      android:
-        applies-to: version-updates
+      gradle-root-security:
+        applies-to: security-updates
         patterns:
-          - "*"       # A wildcard that matches all dependencies in the package
-  
-  # Keep the Android dependencies up to date
-  - package-ecosystem: "gradle" # See documentation for possible values
-    directory: "/zero_bounce_sdk/" # Location of package manifests
+          - "*"
+
+  - package-ecosystem: "gradle"
+    directory: "/zero_bounce_sdk/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    target-branch: "master"
+      interval: weekly
+      day: tuesday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 0
     labels:
+      - "dependabot-security"
       - "android dependencies"
     groups:
-      android:
-        applies-to: version-updates
+      gradle-sdk-security:
+        applies-to: security-updates
         patterns:
-          - "*"       # A wildcard that matches all dependencies in the package
+          - "*"
 
-  # Keep the Github Actions dependencies up to date
-  - package-ecosystem: "github-actions" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    target-branch: "master"
+      interval: weekly
+      day: tuesday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 0
     labels:
+      - "dependabot-security"
       - "github dependencies"
     groups:
-      github:
-        applies-to: version-updates
+      github-actions-security:
+        applies-to: security-updates
         patterns:
-          - "*"       # A wildcard that matches all dependencies in the package
+          - "*"
