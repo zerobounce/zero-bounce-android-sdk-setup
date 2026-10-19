@@ -1,0 +1,57 @@
+# AGENTS.md
+
+Guidance for AI coding agents working in this repository.
+
+## Project
+
+`zero-bounce-android-sdk-setup` is the ZeroBounce Android SDK. `ZeroBounceSDK` is a Kotlin `object` (one shared client). `ZeroBounceClient` is a separate object per API key. HTTP goes through OkHttp. Releases are published to Maven Central as `com.zerobounce.android:zerobouncesdk`.
+
+## Layout
+
+- `zero_bounce_sdk/src/main/java/com/zerobounce/android/ZeroBounceSDK.kt`: shared client and request helpers.
+- `zero_bounce_sdk/src/main/java/com/zerobounce/android/ZeroBounceClient.kt`: one API key. It delegates through a thread-local `SdkState`.
+- `zero_bounce_sdk/src/main/java/com/zerobounce/android/Priority3Api.kt`: bulk email finder, domain search, list evaluator, filters, S3.
+- `zero_bounce_sdk/src/main/java/com/zerobounce/android/HttpMessages.kt`: turns HTML, empty bodies, and parser failures into a short `ErrorResponse`.
+- `zero_bounce_sdk/src/test/java/com/zerobounce/android/OfflineApiTest.kt`: offline suite. A fake OkHttp interceptor records every call. No network and no real API key.
+- `zero_bounce_sdk/build.gradle`: `PUBLISH_VERSION` is the only version to bump.
+
+## Commands
+
+```bash
+./gradlew :zero_bounce_sdk:testDebugUnitTest
+./gradlew :zero_bounce_sdk:assembleDebug
+```
+
+The Kotlin compile inside `testDebugUnitTest` is the typecheck. CI (`.github/workflows/sdk_ci.yml`) runs those two tasks. There is no separate lint step that CI runs.
+
+## Conventions
+
+- **One client per API key.** `ZeroBounceSDK` shares one key. Do not call `initialize` on it for two users. Construct `ZeroBounceClient` per key. The offline concurrency test does this.
+- **Column indexes are 1-based** for `sendFile`, scoring send, email finder, domain search, and list evaluator. `0` means the optional name, gender, or IP column is left out. `ValidateS3FileOptions.emailAddressColumn` sends `0` when set. `sendFile`'s email column rejects `0`.
+- **Optional parameters are omitted when unset.** Explicit `false` is sent as `false`. Validate `timeout` must be 3–60 seconds. Batch `timeout` must be 10–120. `0` is outside those ranges and is rejected before a request. `0` on an optional name column means the column is omitted. `0` on an S3 email column is sent.
+- **Booleans are the strings `true` and `false`.** Do not send `1` or `0`.
+- **`allow_phase_2` is validation send and `validateS3File` only.** `activity_data` on get-file is validation only.
+- **`validateBatch` uses `api.zerobounce.net`**, not `bulkapi.zerobounce.net`.
+- **Failures use the error callback.** The message must be short: no raw HTML, no megabyte body, no parser exception text, and no `Error: Error:` prefix. An account-level `validateBatch` error (`email_address` `all`) is an error callback. A per-address error stays on the success result.
+- **Tests set `transportInterceptor` before `initialize`.** Do not call the live API from the default test run.
+- **`BuildGradleValidationTest` fails when `PUBLISH_VERSION` appears on a dependency line.** A real dependency may share that number. Add its coordinate to `COORDINATES_ALLOWED_TO_MATCH` only after you confirm the version is that dependency's own. Do not delete or weaken the test.
+- `http://localhost` is allowed as a base URL. Any other non-HTTPS base URL is rejected.
+- Match the surrounding style. Do not reformat unrelated code.
+
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+
+- Add every user-visible change to `## [Unreleased]` in the same commit as the change.
+- Group entries under these headings, in this order, omitting empty ones: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+- Write for SDK users. Leave out CI-only changes, internal refactors, and fixes to code that was never released.
+- At 2.y.z, a breaking change bumps the major version, a new method or option bumps the minor version, and fixes alone bump the patch version. A `compileSdk` increase that raises the AAR `minCompileSdk` is not a patch.
+
+## Releasing
+
+Publishing and pushing tags need a maintainer's explicit approval. Do not bump the version, tag, or publish unless they asked.
+
+1. Move `[Unreleased]` entries under `## [x.y.z] - YYYY-MM-DD`, leave an empty `[Unreleased]` section, and update the compare links at the bottom of `CHANGELOG.md`.
+2. Set `PUBLISH_VERSION` in `zero_bounce_sdk/build.gradle`. That is the only version field. If it matches a dependency version, update `COORDINATES_ALLOWED_TO_MATCH` in `BuildGradleValidationTest` instead of removing the guard.
+3. `./gradlew :zero_bounce_sdk:testDebugUnitTest` and `./gradlew :zero_bounce_sdk:assembleDebug`.
+4. Tag `vx.y.z` on that commit and run the Publish workflow with that tag. It uploads a bundle to the Sonatype Central Portal.

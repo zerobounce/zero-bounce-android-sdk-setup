@@ -45,6 +45,7 @@ class ZeroBounceSDKTest {
             File(ZeroBounceSDKTest::class.java.getResource("/")?.path!!)
         )
         server.start()
+        ZeroBounceSDK.transportInterceptor = null
         // Prepare the server's url and overwrite the ZeroBounceSDK's base url
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()

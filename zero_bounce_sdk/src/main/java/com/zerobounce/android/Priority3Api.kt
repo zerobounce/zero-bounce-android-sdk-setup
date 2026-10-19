@@ -57,9 +57,7 @@ internal class Priority3Api {
     ): Map<String, String> {
         val fields = mutableMapOf("domain_column" to domainColumn.toString())
         if (options != null) {
-            if (options.hasHeaderRow == true) {
-                fields["has_header_row"] = "true"
-            }
+            options.hasHeaderRow?.let { fields["has_header_row"] = if (it) "true" else "false" }
             if (options.firstNameColumn > 0) {
                 fields["first_name_column"] = options.firstNameColumn.toString()
             }
@@ -123,9 +121,7 @@ internal class Priority3Api {
         options: ZBDomainSearchSendFileOptions?,
     ): Map<String, String> {
         val fields = mutableMapOf("domain_column" to domainColumn.toString())
-        if (options?.hasHeaderRow == true) {
-            fields["has_header_row"] = "true"
-        }
+        options?.hasHeaderRow?.let { fields["has_header_row"] = if (it) "true" else "false" }
         return fields
     }
 
