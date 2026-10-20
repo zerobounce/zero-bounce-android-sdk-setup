@@ -144,6 +144,60 @@ class ZeroBounceSDKTest {
     }
 
     @Test
+    fun validateEmail_AiAgentMailbox_Valid() {
+        assertSubStatusParsed("valid", "ai_agent_mailbox", ZBValidateSubStatus.AI_AGENT_MAILBOX)
+    }
+
+    @Test
+    fun validateEmail_AiAgentMailbox_CatchAll() {
+        assertSubStatusParsed("catch-all", "ai_agent_mailbox", ZBValidateSubStatus.AI_AGENT_MAILBOX)
+    }
+
+    @Test
+    fun validateEmail_UnknownSubStatus_IsNullNotAnError() {
+        // Gson maps an unrecognised enum constant to null rather than throwing,
+        // so a sub_status added to the API after this SDK shipped degrades to
+        // null instead of failing the whole validate call.
+        assertSubStatusParsed("valid", "some_future_sub_status", null)
+    }
+
+    /** Validates one email whose response carries the given status/sub_status and checks the parsed enum. */
+    private fun assertSubStatusParsed(
+        status: String,
+        subStatus: String,
+        expected: ZBValidateSubStatus?
+    ) {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\n" +
+                "        \"address\":\"agent@example.com\",\n" +
+                "        \"status\":\"$status\",\n" +
+                "        \"sub_status\":\"$subStatus\"\n" +
+                "        }"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.validate(
+            "agent@example.com",
+            null,
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        if (actualResponse == null) {
+            server.takeRequest()
+        }
+        countDownLatch.await()
+
+        assertTrue(actualResponse is ZBValidateResponse)
+        assertEquals(expected, (actualResponse as ZBValidateResponse).subStatus)
+    }
+
+    @Test
     fun validateEmail_ReturnsError() {
         val countDownLatch = CountDownLatch(1)
 
