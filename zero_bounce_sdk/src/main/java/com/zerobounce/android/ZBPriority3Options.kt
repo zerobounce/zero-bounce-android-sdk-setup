@@ -33,3 +33,34 @@ data class ZBScoreS3FileOptions(
     val removeDuplicate: Boolean? = null,
     val emailAddressColumn: Int? = null,
 )
+
+/**
+ * The documented fields shared by the six S3 and SFTP/FTP file jobs.
+ *
+ * [fileName] is required by every job except [ZeroBounceSDK.validateSFTPFile],
+ * where the docs list it as optional: leaving it null there uses the input
+ * bucket configured in your ZeroBounce settings.
+ */
+data class ZBBulkFileJobOptions(
+    val fileName: String? = null,
+    val hasHeaderRow: Boolean = true,
+    val removeDuplicates: Boolean? = null,
+    val returnUrl: String? = null,
+)
+
+/** The optional fields of a new Inbox Placement test. Only what is set is sent. */
+data class ZBCreateInboxPlacementTestOptions(
+    val testType: Int? = null,
+    val senderEmail: String? = null,
+    val providerIds: List<Int>? = null,
+    val seedIds: List<Int>? = null,
+    val providers: List<Map<String, Any?>>? = null,
+    val webhookUrl: String? = null,
+)
+
+/** The documented filters of the Inbox Placement test list. */
+data class ZBListInboxPlacementTestsOptions(
+    val status: String? = null,
+    val page: Int? = null,
+    val pageSize: Int? = null,
+)

@@ -14,10 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `validateBatch` accepts the same options on `POST /v2/validatebatch`. A `timeout` outside 3–60 seconds (validate) or 10–120 seconds (batch) is rejected before a request is sent.
 - `ZBValidateResponse` reads `active_in_days` and `active_first_seen`.
 - `scoreEmail` (`GET /v2/scoring`) and a form-encoded `POST /v2/scoring`.
-- Bulk email finder, bulk domain search, list evaluator, filters, and S3 bulk (`listS3Files`, `validateS3File`, `scoreS3File`, `exportS3File`). `has_header_row` is `true` or `false` when set. An S3 email column of `0` is sent when set.
+- Bulk email finder, bulk domain search, list evaluator, filters, and S3 bulk (`listS3Files`, `validateS3File`, `scoreS3File`, `exportS3File`, `emailFinderS3File`, `domainSearchS3File`). `has_header_row` is `true` or `false` when set. An S3 email column of `0` is sent when set.
+- SFTP/FTP bulk (`validateSFTPFile`, `scoreSFTPFile`, `emailFinderSFTPFile`, `domainSearchSFTPFile`, `exportSFTPFile`), sharing the new `ZBBulkFileJobOptions`. The server, path and protocol come from your ZeroBounce settings. `validateSFTPFile`'s `fileName` is optional; `exportSFTPFile` takes `export_path` rather than the `export_bucket` `exportS3File` sends.
+- `ZBValidateOptions` accepts `domainInfo`, `greylistProcessing` and `callbackUrl`. `callbackUrl` needs `greylistProcessing = true` and is rejected without it, and when blank, before a request is sent.
+- `ZBValidateResponse` reads `domain_website_exists`, `domain_registrant_company_name` and `Message`. `Message` is returned instead of a result while a greylist retry is still running.
+- Inbox Placement Tester on `https://bulkapi.zerobounce.net/api/ipt`: `getInboxPlacementProviders`, `getInboxPlacementTestTypes`, `createInboxPlacementTest`, `getInboxPlacementTest`, `listInboxPlacementTests`, `deleteInboxPlacementTest`, `getInboxPlacementWebhook`, `setInboxPlacementWebhook`. The API key goes on the query string, bodies are camelCase JSON, and unset fields are left out.
+- `setListEvaluatorBaseUrl` and `setInboxPlacementBaseUrl`. The list evaluator and the Inbox Placement Tester are separate hosts, not paths built from the bulk base, so `initialize` alone does not change them.
+
+### Changed
+
+- The list evaluator uses its own base URL instead of building the path from the bulk base. `sendEvaluatedFile` stays on the bulk base.
+- `exportS3File`'s `exportBucket` is nullable, matching the documented endpoint: `null` uses the export bucket from your ZeroBounce settings. A blank string is still rejected.
 
 ### Fixed
 
+- A file id and an Inbox Placement test id are encoded as a single path segment. They previously went through the form encoder, which turns a space into `+` — correct in a query string, but a literal plus in a path.
 - A large HTML "Access denied" page is a short error. An HTML page with status 200 is an error as well, including `getFile`, `emailFinderGetFile`, and `domainSearchGetFile`, instead of a saved file.
 - Empty and non-JSON bodies are a short error. The message is no longer a parser exception, and a repeated `Error:` / `[Error]:` prefix is removed.
 - A Cloudflare JSON 403 (`error_code` 1020) is the title "Error 1020: Access denied", not the raw body.

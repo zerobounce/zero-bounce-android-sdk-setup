@@ -897,6 +897,368 @@ class OfflineApiTest {
         }
     }
 
+    @Test
+    fun validateSendsTheNewOptionsOnlyWhenSet() {
+        useSharedKey("validate-key")
+
+        await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate("a@example.com", null, ZBValidateOptions(), ok, err)
+        }
+        var request = onlyRequest()
+        for (absent in listOf("domain_info", "greylist_processing", "callback_url")) {
+            assertFalse("$absent should not be sent", request.fields.containsKey(absent))
+        }
+
+        await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate(
+                "a@example.com",
+                null,
+                ZBValidateOptions(
+                    domainInfo = true,
+                    greylistProcessing = true,
+                    callbackUrl = "https://example.com/greylist",
+                ),
+                ok,
+                err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("GET", request.method)
+        // Booleans go on the wire as the strings "true"/"false".
+        assertEquals("true", request.fields["domain_info"])
+        assertEquals("true", request.fields["greylist_processing"])
+        assertEquals("https://example.com/greylist", request.fields["callback_url"])
+
+        await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate(
+                "a@example.com",
+                null,
+                ZBValidateOptions(
+                    domainInfo = false,
+                    greylistProcessing = true,
+                    callbackUrl = "https://example.com/greylist",
+                    usePost = true,
+                ),
+                ok,
+                err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("false", request.fields["domain_info"])
+        assertEquals("https://example.com/greylist", request.fields["callback_url"])
+    }
+
+    @Test
+    fun domainInfoAndGreylistFieldsParseOntoTheResponse() {
+        // The fake answers every /validate the same way, so this pins the
+        // mapping rather than the request.
+        val json = """{"address":"a@example.com","status":"valid",""" +
+            """"domain_website_exists":"true",""" +
+            """"domain_registrant_company_name":"Example Inc",""" +
+            """"Message":"Greylisted email, we will retry"}"""
+        val response = com.google.gson.Gson().fromJson(json, ZBValidateResponse::class.java)
+
+        assertEquals("true", response.domainWebsiteExists)
+        assertEquals("Example Inc", response.domainRegistrantCompanyName)
+        // While a greylist retry is still running the API answers with
+        // "Message" instead of a result.
+        assertEquals("Greylisted email, we will retry", response.message)
+    }
+
+    @Test
+    fun callbackUrlWithoutGreylistProcessingSendsNoRequest() {
+        useSharedKey("validate-key")
+
+        var outcome = await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate(
+                "a@example.com", null,
+                ZBValidateOptions(callbackUrl = "https://example.com/cb"), ok, err,
+            )
+        }
+        assertTrue(outcome.errorText().orEmpty().contains("greylist_processing"))
+
+        outcome = await { ok, err ->
+            ZeroBounceSDK.validate(
+                "a@example.com", null,
+                ZBValidateOptions(greylistProcessing = false, callbackUrl = "https://example.com/cb"),
+                ok, err,
+            )
+        }
+        assertTrue(outcome.errorText().orEmpty().contains("greylist_processing"))
+
+        outcome = await { ok, err ->
+            ZeroBounceSDK.validate(
+                "a@example.com", null,
+                ZBValidateOptions(greylistProcessing = true, callbackUrl = "   "), ok, err,
+            )
+        }
+        assertTrue(outcome.errorText().orEmpty().contains("callback_url"))
+
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun s3AndSftpFileJobsSendTheDocumentedFieldsOnly() {
+        useSharedKey("bulk-key")
+
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.emailFinderS3File(
+                ZBBulkFileJobOptions(fileName = "lists/leads.csv", hasHeaderRow = true), ok, err,
+            )
+        }
+        var request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("bulkapi.zerobounce.net", request.host)
+        // The S3 and SFTP jobs live on the bulkapi root, WITHOUT /v2.
+        assertEquals("/emailFinderS3file", request.path)
+        assertEquals("lists/leads.csv", request.fields["file_name"])
+        assertEquals("true", request.fields["has_header_row"])
+        // Unset options stay off the request entirely.
+        assertFalse(request.fields.containsKey("remove_duplicates"))
+        assertFalse(request.fields.containsKey("return_url"))
+
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.domainSearchS3File(
+                ZBBulkFileJobOptions(
+                    fileName = "lists/leads.csv",
+                    hasHeaderRow = false,
+                    removeDuplicates = true,
+                    returnUrl = "https://example.com/done",
+                ),
+                ok, err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("/domainSearchS3file", request.path)
+        assertEquals("false", request.fields["has_header_row"])
+        assertEquals("true", request.fields["remove_duplicates"])
+        assertEquals("https://example.com/done", request.fields["return_url"])
+
+        // file_name is optional for validateSFTPfile alone: without it the
+        // input bucket from the account's settings is used.
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.validateSFTPFile(ZBBulkFileJobOptions(hasHeaderRow = true), ok, err)
+        }
+        request = onlyRequest()
+        assertEquals("/validateSFTPfile", request.path)
+        assertFalse(request.fields.containsKey("file_name"))
+        assertEquals("true", request.fields["has_header_row"])
+
+        val named = ZBBulkFileJobOptions(fileName = "my_file.txt")
+        val jobs = listOf<Pair<String, (ZBBulkFileJobOptions, (ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>>(
+            "/validateSFTPfile" to ZeroBounceSDK::validateSFTPFile,
+            "/scoreSFTPfile" to ZeroBounceSDK::scoreSFTPFile,
+            "/emailFinderSFTPfile" to ZeroBounceSDK::emailFinderSFTPFile,
+            "/domainSearchSFTPfile" to ZeroBounceSDK::domainSearchSFTPFile,
+        )
+        for ((path, call) in jobs) {
+            await<ZBSendFileResponse> { ok, err -> call(named, ok, err) }
+            request = onlyRequest()
+            assertEquals(path, request.path)
+            assertEquals("my_file.txt", request.fields["file_name"])
+        }
+
+        // exportSFTPfile takes export_path, not the export_bucket exportS3file uses.
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.exportSFTPFile("fid", "/exports", ok, err)
+        }
+        request = onlyRequest()
+        assertEquals("/exportSFTPfile", request.path)
+        assertEquals("fid", request.fields["file_id"])
+        assertEquals("/exports", request.fields["export_path"])
+        assertFalse(request.fields.containsKey("export_bucket"))
+
+        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.exportSFTPFile("fid", null, ok, err) }
+        assertFalse(onlyRequest().fields.containsKey("export_path"))
+
+        // exportS3file's bucket is optional in the same way.
+        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.exportS3File("fid", null, ok, err) }
+        assertFalse(onlyRequest().fields.containsKey("export_bucket"))
+    }
+
+    @Test
+    fun bulkJobsRejectInvalidArgumentsBeforeARequest() {
+        useSharedKey("bulk-key")
+        val blank = ZBBulkFileJobOptions(fileName = "   ")
+        val calls = listOf<(ZBBulkFileJobOptions, (ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>(
+            ZeroBounceSDK::emailFinderS3File,
+            ZeroBounceSDK::domainSearchS3File,
+            ZeroBounceSDK::scoreSFTPFile,
+            ZeroBounceSDK::emailFinderSFTPFile,
+            ZeroBounceSDK::domainSearchSFTPFile,
+            // An unset name is allowed here, but a blank one is not.
+            ZeroBounceSDK::validateSFTPFile,
+        )
+        for (call in calls) {
+            val outcome = await<ZBSendFileResponse> { ok, err -> call(blank, ok, err) }
+            assertTrue(outcome.errorText().orEmpty().contains("file_name"))
+        }
+
+        val missing = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.emailFinderS3File(ZBBulkFileJobOptions(), ok, err)
+        }
+        assertTrue(missing.errorText().orEmpty().contains("file_name"))
+
+        val fileId = await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.exportSFTPFile("  ", null, ok, err) }
+        assertTrue(fileId.errorText().orEmpty().contains("file_id"))
+        val path = await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.exportSFTPFile("fid", " ", ok, err) }
+        assertTrue(path.errorText().orEmpty().contains("export_path"))
+        val bucket = await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.exportS3File("fid", " ", ok, err) }
+        assertTrue(bucket.errorText().orEmpty().contains("export_bucket"))
+
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun listEvaluatorUsesItsOwnBaseUrlAndEncodesTheFileId() {
+        useSharedKey("eval-key")
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getListEvaluatorResult("a b/c", ok, err)
+        }
+        val request = onlyRequest()
+        assertEquals("bulkapi.zerobounce.net", request.host)
+        // The file id is one path segment, so a slash in it must stay encoded.
+        assertEquals("/v2/listevaluator/a%20b%2Fc/", request.path)
+
+        val blank = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getListEvaluatorResult("  ", ok, err)
+        }
+        assertTrue(blank.errorText().orEmpty().contains("file_id"))
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun inboxPlacementUsesItsOwnHostAndCamelCaseJson() {
+        useSharedKey("ipt-key")
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementProviders(ok, err)
+        }
+        var request = onlyRequest()
+        assertEquals("/api/ipt/providers", request.path)
+        // The API key goes on the query string here, not in the body.
+        assertEquals("ipt-key", request.apiKey)
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementTestTypes(ok, err)
+        }
+        assertEquals("/api/ipt/test-types", onlyRequest().path)
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(
+                "Launch",
+                ZBCreateInboxPlacementTestOptions(
+                    testType = 1,
+                    senderEmail = "news@example.com",
+                    webhookUrl = "https://example.com/ipt",
+                ),
+                ok, err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/ipt/test", request.path)
+        // Bodies are camelCase JSON, and unset fields are left out.
+        assertEquals("Launch", request.fields["name"])
+        assertEquals("1", request.fields["testType"])
+        assertEquals("news@example.com", request.fields["senderEmail"])
+        assertEquals("https://example.com/ipt", request.fields["webhookUrl"])
+        assertFalse(request.fields.containsKey("providerIds"))
+        assertFalse(request.fields.containsKey("seedIds"))
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.listInboxPlacementTests(
+                ZBListInboxPlacementTestsOptions(status = "finished", page = 1, pageSize = 25), ok, err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("finished", request.fields["status"])
+        assertEquals("1", request.fields["page"])
+        assertEquals("25", request.fields["pageSize"])
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.listInboxPlacementTests(null, ok, err)
+        }
+        request = onlyRequest()
+        assertFalse(request.fields.containsKey("status"))
+        assertFalse(request.fields.containsKey("page"))
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.deleteInboxPlacementTest("a b/c", ok, err)
+        }
+        request = onlyRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/api/ipt/test/a%20b%2Fc", request.path)
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.setInboxPlacementWebhook("https://example.com/ipt", ok, err)
+        }
+        request = onlyRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/api/ipt/webhook", request.path)
+        assertEquals("https://example.com/ipt", request.fields["webhookUrl"])
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementWebhook(ok, err)
+        }
+        assertEquals("/api/ipt/webhook", onlyRequest().path)
+
+        val testId = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementTest("  ", ok, err)
+        }
+        assertTrue(testId.errorText().orEmpty().contains("test_id"))
+        val name = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(" ", null, ok, err)
+        }
+        assertTrue(name.errorText().orEmpty().contains("name"))
+        val webhook = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.setInboxPlacementWebhook("", ok, err)
+        }
+        assertTrue(webhook.errorText().orEmpty().contains("webhook_url"))
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun inboxPlacementDetailErrorBecomesTheMessage() {
+        useSharedKey("ipt-detail")
+
+        val outcome = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementTest("123", ok, err)
+        }
+
+        assertTrue(outcome.errorText().orEmpty().contains("Inbox placement test not found."))
+    }
+
+    @Test
+    fun listEvaluatorAndInboxPlacementBaseUrlsAreOverridable() {
+        // These are separate hosts, not paths built from the bulk base, so an
+        // override of the main base URL alone would leave them on the live API.
+        useSharedKey("eval-key")
+        ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulk.example.test/v2/listevaluator")
+        ZeroBounceSDK.setInboxPlacementBaseUrl("https://bulk.example.test/api/ipt")
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getListEvaluatorResult("fid", ok, err)
+        }
+        assertEquals("bulk.example.test", onlyRequest().host)
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementProviders(ok, err)
+        }
+        assertEquals("bulk.example.test", onlyRequest().host)
+
+        var rejected = false
+        try {
+            ZeroBounceSDK.setListEvaluatorBaseUrl("http://evil.example")
+        } catch (e: IllegalArgumentException) {
+            rejected = true
+        }
+        assertTrue("an http:// base URL should be rejected", rejected)
+        resetSharedUrls()
+    }
+
     private fun openClient(key: String): ZeroBounceClient {
         val sdk = ZeroBounceClient()
         sdk.transportInterceptor = fake
@@ -915,6 +1277,8 @@ class OfflineApiTest {
         ZeroBounceSDK.bulkApiBaseUrl = "https://bulkapi.zerobounce.net/v2"
         ZeroBounceSDK.bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.net/v2/scoring"
         ZeroBounceSDK.bulkApiRootUrl = "https://bulkapi.zerobounce.net"
+        ZeroBounceSDK.listEvaluatorBaseUrl = "https://bulkapi.zerobounce.net/v2/listevaluator"
+        ZeroBounceSDK.inboxPlacementBaseUrl = "https://bulkapi.zerobounce.net/api/ipt"
     }
 
     private fun onlyRequest(): RecordedRequest {
@@ -974,6 +1338,7 @@ class OfflineApiTest {
 internal class RecordedRequest(
     val method: String,
     val host: String,
+    /** The percent-encoded path, which is what goes on the wire. */
     val path: String,
     val apiKey: String,
     val fields: Map<String, String>,
@@ -1080,6 +1445,11 @@ internal class FakeApi : Interceptor {
                 "application/json",
                 """{"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1020/","title":"Error 1020: Access denied","status":403,"detail":"The request was blocked by a Cloudflare firewall rule configured by the site owner.","error_code":1020,"cloudflare_error":true,"what_you_should_do":"Do not retry. This block is intentional."}""",
             )
+        }
+        if (key.startsWith("ipt-detail")) {
+            // The Inbox Placement Tester is a Django REST framework app and
+            // reports errors under "detail".
+            return Answer(404, "application/json", """{"detail":"Inbox placement test not found."}""")
         }
         if (key.startsWith("double-error-")) {
             return Answer(400, "text/plain", "Error: Error: api_key is invalid")

@@ -411,3 +411,103 @@ Alternatively, you can only execute the first command, then then go to the [Nexu
     gpg --list-keys
     gpg --list-secret-keys
     ```
+
+## Validate options
+
+`validate` takes a `ZBValidateOptions`. An option left `null` is not sent, and
+booleans go on the wire as the strings `"true"`/`"false"`.
+
+```kotlin
+ZeroBounceSDK.validate(
+    "<EMAIL>",
+    null,
+    ZBValidateOptions(
+        timeout = 30,                 // 3-60 seconds
+        activityData = true,          // fills activeInDays / activeFirstSeen
+        verifyPlus = true,
+        domainInfo = true,            // fills domainWebsiteExists / domainRegistrantCompanyName
+        greylistProcessing = true,
+        callbackUrl = "https://example.com/greylist",
+        usePost = true,               // form-encoded POST /v2/validate instead of GET
+    ),
+    { response -> println(response?.status) },
+    { error -> println(error?.errors) },
+)
+```
+
+`callbackUrl` is where the greylist retry posts its result, so it is rejected
+without `greylistProcessing = true` — before any request is sent. While that
+retry is still running the API answers with a `Message` instead of a result,
+which lands on `response.message`.
+
+## S3 and SFTP/FTP bulk
+
+Queue a job on a file that already sits in your Amazon S3 bucket, or on your
+SFTP/FTP server. See the [S3](https://www.zerobounce.net/docs/api-integrations/amazon-s3-bulk-api)
+and [SFTP](https://www.zerobounce.net/docs/api-integrations/sftp_bulk_api) docs.
+These live on the bulkapi host *without* the `/v2` path.
+
+```kotlin
+// Amazon S3. fileName is the full path, as returned by listS3Files.
+ZeroBounceSDK.emailFinderS3File(
+    ZBBulkFileJobOptions(fileName = "lists/leads.csv", hasHeaderRow = true), ok, error)
+
+ZeroBounceSDK.domainSearchS3File(
+    ZBBulkFileJobOptions(
+        fileName = "lists/leads.csv",
+        removeDuplicates = true,
+        returnUrl = "https://example.com/zerobounce-done",
+    ),
+    ok, error)
+
+// SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
+// fileName may be left null for validateSFTPFile alone, which then uses the
+// input bucket from those settings.
+ZeroBounceSDK.validateSFTPFile(ZBBulkFileJobOptions(hasHeaderRow = true), ok, error)
+ZeroBounceSDK.scoreSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
+ZeroBounceSDK.emailFinderSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
+ZeroBounceSDK.domainSearchSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
+
+// Note the field: this one takes export_path, not export_bucket.
+// null uses the export path from your settings.
+ZeroBounceSDK.exportSFTPFile("<FILE_ID>", "/exports", ok, error)
+```
+
+## Inbox Placement Tester
+
+Runs on its own host, takes the API key on the query string, and sends camelCase
+JSON bodies. It spends the account's inbox-test credits.
+
+```kotlin
+ZeroBounceSDK.getInboxPlacementProviders(ok, error)
+ZeroBounceSDK.getInboxPlacementTestTypes(ok, error)
+
+ZeroBounceSDK.createInboxPlacementTest(
+    "Launch",
+    ZBCreateInboxPlacementTestOptions(
+        testType = 1,
+        senderEmail = "news@example.com",
+        webhookUrl = "https://example.com/ipt-webhook",
+    ),
+    ok, error)
+
+// Send your campaign to the seeds you got back, then read the results.
+ZeroBounceSDK.getInboxPlacementTest("<TEST_ID>", ok, error)
+
+ZeroBounceSDK.listInboxPlacementTests(
+    ZBListInboxPlacementTestsOptions(status = "finished", page = 1), ok, error)
+ZeroBounceSDK.setInboxPlacementWebhook("https://example.com/ipt-webhook", ok, error)
+ZeroBounceSDK.getInboxPlacementWebhook(ok, error)
+ZeroBounceSDK.deleteInboxPlacementTest("<TEST_ID>", ok, error)
+```
+
+## Per-API base URLs
+
+The list evaluator and the Inbox Placement Tester are separate hosts, so
+`initialize` alone leaves them pointing at the live API.
+
+```kotlin
+ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulkapi.zerobounce.net/v2/listevaluator")
+ZeroBounceSDK.setInboxPlacementBaseUrl("https://bulkapi.zerobounce.net/api/ipt")
+```
+

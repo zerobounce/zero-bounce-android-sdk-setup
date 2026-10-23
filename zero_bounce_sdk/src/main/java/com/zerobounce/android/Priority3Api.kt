@@ -220,9 +220,14 @@ internal class Priority3Api {
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
+        if (fileId.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: file_id"))
+            return
+        }
         val key = ZeroBounceSDK.priority3ApiKey() ?: return
         ZeroBounceSDK.priority3GetJson(
-            "${ZeroBounceSDK.priority3BulkApiBaseUrl()}/listevaluator/$fileId/",
+            // The file id is one path segment, so a slash in it must stay encoded.
+            "${ZeroBounceSDK.priority3ListEvaluatorBaseUrl()}/${ZeroBounceSDK.encPathSegment(fileId.trim())}/",
             mapOf("api_key" to key),
             responseCallback,
             errorCallback,
@@ -347,7 +352,7 @@ internal class Priority3Api {
 
     fun exportS3File(
         fileId: String,
-        exportBucket: String,
+        exportBucket: String?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -355,16 +360,103 @@ internal class Priority3Api {
             errorCallback(ErrorResponse.parseError("Empty parameter: file_id"))
             return
         }
-        if (exportBucket.isBlank()) {
+        if (exportBucket != null && exportBucket.isBlank()) {
             errorCallback(ErrorResponse.parseError("Empty parameter: export_bucket"))
             return
         }
-        postBulkRootForm(
-            "/exportS3file",
-            mapOf("file_id" to fileId, "export_bucket" to exportBucket),
-            responseCallback,
-            errorCallback,
-        )
+        // Without an export_bucket the one from the account's settings is used.
+        val fields = mutableMapOf("file_id" to fileId)
+        exportBucket?.let { fields["export_bucket"] = it }
+        postBulkRootForm("/exportS3file", fields, responseCallback, errorCallback)
+    }
+
+    fun emailFinderS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/emailFinderS3file", options, true, responseCallback, errorCallback)
+
+    fun domainSearchS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/domainSearchS3file", options, true, responseCallback, errorCallback)
+
+    // SFTP / FTP bulk. The server, path and protocol are never sent by the SDK;
+    // they come from your ZeroBounce settings.
+
+    fun validateSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/validateSFTPfile", options, false, responseCallback, errorCallback)
+
+    fun scoreSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/scoreSFTPfile", options, true, responseCallback, errorCallback)
+
+    fun emailFinderSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/emailFinderSFTPfile", options, true, responseCallback, errorCallback)
+
+    fun domainSearchSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = bulkRootFileJob("/domainSearchSFTPfile", options, true, responseCallback, errorCallback)
+
+    /**
+     * Exports a validated or scored file back to your SFTP/FTP server.
+     *
+     * Note the field name: this endpoint takes export_path, not the
+     * export_bucket that [exportS3File] sends.
+     */
+    fun exportSFTPFile(
+        fileId: String,
+        exportPath: String?,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (fileId.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: file_id"))
+            return
+        }
+        if (exportPath != null && exportPath.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: export_path"))
+            return
+        }
+        val fields = mutableMapOf("file_id" to fileId)
+        exportPath?.let { fields["export_path"] = it }
+        postBulkRootForm("/exportSFTPfile", fields, responseCallback, errorCallback)
+    }
+
+    /**
+     * POSTs one of the six documented S3 / SFTP file jobs on the bulkapi root.
+     *
+     * Booleans go on the wire as the strings "true"/"false", and an option the
+     * caller left unset is not sent at all.
+     */
+    private fun bulkRootFileJob(
+        path: String,
+        options: ZBBulkFileJobOptions,
+        fileNameRequired: Boolean,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val blank = options.fileName != null && options.fileName.isBlank()
+        if ((options.fileName == null && fileNameRequired) || blank) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
+            return
+        }
+        val fields = mutableMapOf("has_header_row" to options.hasHeaderRow.toString())
+        options.fileName?.let { fields["file_name"] = it }
+        options.removeDuplicates?.let { fields["remove_duplicates"] = it.toString() }
+        options.returnUrl?.let { fields["return_url"] = it }
+        postBulkRootForm(path, fields, responseCallback, errorCallback)
     }
 
     private fun buildValidateS3Fields(options: ZBValidateS3FileOptions): Map<String, String> {
@@ -394,6 +486,29 @@ internal class Priority3Api {
         if (value != null) {
             fields[key] = value.toString()
         }
+    }
+
+    fun inboxPlacementRequest(
+        method: String,
+        path: String,
+        query: Map<String, String>,
+        body: Map<String, Any?>?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val key = ZeroBounceSDK.priority3ApiKey() ?: return
+        // The API key goes on the query string here, not in the body.
+        val params = query + mapOf("api_key" to key)
+        val queryString = params.entries.joinToString("&") { (k, v) ->
+            "${ZeroBounceSDK.encQuery(k)}=${ZeroBounceSDK.encQuery(v)}"
+        }
+        ZeroBounceSDK.priority3JsonRequest(
+            method,
+            "${ZeroBounceSDK.priority3InboxPlacementBaseUrl()}$path?$queryString",
+            body,
+            responseCallback,
+            errorCallback,
+        )
     }
 
     private fun postBulkRootForm(

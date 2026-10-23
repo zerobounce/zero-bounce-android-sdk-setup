@@ -86,5 +86,18 @@ data class ZBValidateResponse(
     @SerializedName("processed_at")
     val processedAt: Date? = null,
 
+    // Returned with domain_info.
+    @SerializedName("domain_website_exists")
+    val domainWebsiteExists: String? = null,
+
+    // Returned with domain_info.
+    @SerializedName("domain_registrant_company_name")
+    val domainRegistrantCompanyName: String? = null,
+
+    // The API's "Message" key, returned instead of a result while a greylist
+    // retry is still running.
+    @SerializedName("Message")
+    val message: String? = null,
+
     val error: String? = null
 ) : JSONConvertable

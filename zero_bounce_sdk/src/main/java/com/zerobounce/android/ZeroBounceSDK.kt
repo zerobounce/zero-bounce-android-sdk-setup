@@ -78,6 +78,14 @@ object ZeroBounceSDK {
         get() = state().bulkApiBaseUrl
         set(value) { state().bulkApiBaseUrl = value }
 
+    internal var listEvaluatorBaseUrl: String
+        get() = state().listEvaluatorBaseUrl
+        set(value) { state().listEvaluatorBaseUrl = value }
+
+    internal var inboxPlacementBaseUrl: String
+        get() = state().inboxPlacementBaseUrl
+        set(value) { state().inboxPlacementBaseUrl = value }
+
     internal var bulkApiScoringBaseUrl: String
         get() = state().bulkApiScoringBaseUrl
         set(value) { state().bulkApiScoringBaseUrl = value }
@@ -200,6 +208,7 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
         if (options != null && !checkValidateTimeout(options.timeout, errorCallback)) return
+        if (!checkCallbackUrl(options, errorCallback)) return
 
         val ipAddressPart = ipAddress ?: ""
         if (options?.usePost == true) {
@@ -212,6 +221,9 @@ object ZeroBounceSDK {
             options.timeout?.let { fields["timeout"] = it.toString() }
             options.activityData?.let { fields["activity_data"] = if (it) "true" else "false" }
             options.verifyPlus?.let { fields["verify_plus"] = if (it) "true" else "false" }
+            options.domainInfo?.let { fields["domain_info"] = if (it) "true" else "false" }
+            options.greylistProcessing?.let { fields["greylist_processing"] = if (it) "true" else "false" }
+            options.callbackUrl?.let { fields["callback_url"] = it }
             requestFormPost(
                 url = "$apiBaseUrl/validate",
                 formFields = fields,
@@ -229,6 +241,9 @@ object ZeroBounceSDK {
             options.timeout?.let { params += "timeout" to it.toString() }
             options.activityData?.let { params += "activity_data" to if (it) "true" else "false" }
             options.verifyPlus?.let { params += "verify_plus" to if (it) "true" else "false" }
+            options.domainInfo?.let { params += "domain_info" to if (it) "true" else "false" }
+            options.greylistProcessing?.let { params += "greylist_processing" to if (it) "true" else "false" }
+            options.callbackUrl?.let { params += "callback_url" to it }
         }
         request(
             url = urlWithQuery("$apiBaseUrl/validate", params),
@@ -287,6 +302,31 @@ object ZeroBounceSDK {
             },
             errorCallback = errorCallback
         )
+    }
+
+    /**
+     * The callback is where the greylist retry posts its result, so it is
+     * meaningless — and rejected by the API — without the retry itself.
+     * Checked before any request is sent.
+     */
+    private fun checkCallbackUrl(
+        options: ZBValidateOptions?,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): Boolean {
+        val callbackUrl = options?.callbackUrl ?: return true
+        if (callbackUrl.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: callback_url"))
+            return false
+        }
+        if (options.greylistProcessing != true) {
+            errorCallback(
+                ErrorResponse.parseError(
+                    "Invalid parameter: callback_url requires greylist_processing to be true"
+                )
+            )
+            return false
+        }
+        return true
     }
 
     private fun checkValidateTimeout(
@@ -1349,14 +1389,224 @@ object ZeroBounceSDK {
         priority3Api.scoreS3File(options, responseCallback, errorCallback)
     }
 
+    /**
+     * Exports a validated or scored file back to Amazon S3.
+     *
+     * Pass null for [exportBucket] to use the export bucket from your
+     * ZeroBounce settings.
+     */
     fun exportS3File(
         fileId: String,
-        exportBucket: String,
+        exportBucket: String?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
         priority3Api.exportS3File(fileId, exportBucket, responseCallback, errorCallback)
+    }
+
+    /** Runs the email finder on a file in your Amazon S3 bucket. */
+    fun emailFinderS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.emailFinderS3File(options, responseCallback, errorCallback)
+    }
+
+    /** Runs domain search on a file in your Amazon S3 bucket. */
+    fun domainSearchS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.domainSearchS3File(options, responseCallback, errorCallback)
+    }
+
+    /**
+     * Validates a file from your SFTP/FTP server.
+     *
+     * This is the one job whose file_name the docs list as optional: leave
+     * [ZBBulkFileJobOptions.fileName] null to use the input bucket from your
+     * ZeroBounce settings.
+     */
+    fun validateSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.validateSFTPFile(options, responseCallback, errorCallback)
+    }
+
+    /** Scores a file from your SFTP/FTP server. */
+    fun scoreSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.scoreSFTPFile(options, responseCallback, errorCallback)
+    }
+
+    /** Runs the email finder on a file from your SFTP/FTP server. */
+    fun emailFinderSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.emailFinderSFTPFile(options, responseCallback, errorCallback)
+    }
+
+    /** Runs domain search on a file from your SFTP/FTP server. */
+    fun domainSearchSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.domainSearchSFTPFile(options, responseCallback, errorCallback)
+    }
+
+    /**
+     * Exports a validated or scored file back to your SFTP/FTP server.
+     *
+     * Note the field name: this endpoint takes export_path, not the
+     * export_bucket that [exportS3File] sends. Pass null to use the export
+     * path from your ZeroBounce settings.
+     */
+    fun exportSFTPFile(
+        fileId: String,
+        exportPath: String?,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.exportSFTPFile(fileId, exportPath, responseCallback, errorCallback)
+    }
+
+    // Inbox Placement Tester (bulkapi.zerobounce.net/api/ipt). The API key goes
+    // on the query string, bodies are camelCase JSON, and errors come back
+    // under a "detail" key. Spends the account's inbox-test credits.
+
+    /** Seed providers available for new tests. */
+    fun getInboxPlacementProviders(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.inboxPlacementRequest("GET", "/providers", emptyMap(), null, responseCallback, errorCallback)
+    }
+
+    /** Supported test types and the default one. */
+    fun getInboxPlacementTestTypes(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.inboxPlacementRequest("GET", "/test-types", emptyMap(), null, responseCallback, errorCallback)
+    }
+
+    /** Starts a test and returns its seed list. */
+    fun createInboxPlacementTest(
+        name: String,
+        options: ZBCreateInboxPlacementTestOptions?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        if (name.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: name"))
+            return
+        }
+        val body = mutableMapOf<String, Any?>("name" to name)
+        options?.testType?.let { body["testType"] = it }
+        options?.senderEmail?.let { body["senderEmail"] = it }
+        options?.providerIds?.let { body["providerIds"] = it }
+        options?.seedIds?.let { body["seedIds"] = it }
+        options?.providers?.let { body["providers"] = it }
+        options?.webhookUrl?.let { body["webhookUrl"] = it }
+        priority3Api.inboxPlacementRequest("POST", "/test", emptyMap(), body, responseCallback, errorCallback)
+    }
+
+    /** The results of one test. */
+    fun getInboxPlacementTest(
+        testId: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        val segment = inboxPlacementTestSegment(testId, errorCallback) ?: return
+        priority3Api.inboxPlacementRequest("GET", "/test/$segment", emptyMap(), null, responseCallback, errorCallback)
+    }
+
+    /** The account's tests. */
+    fun listInboxPlacementTests(
+        options: ZBListInboxPlacementTestsOptions?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        val query = mutableMapOf<String, String>()
+        options?.status?.let { query["status"] = it }
+        options?.page?.let { query["page"] = it.toString() }
+        options?.pageSize?.let { query["pageSize"] = it.toString() }
+        priority3Api.inboxPlacementRequest("GET", "/test", query, null, responseCallback, errorCallback)
+    }
+
+    /** Deletes one test. */
+    fun deleteInboxPlacementTest(
+        testId: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        val segment = inboxPlacementTestSegment(testId, errorCallback) ?: return
+        priority3Api.inboxPlacementRequest("DELETE", "/test/$segment", emptyMap(), null, responseCallback, errorCallback)
+    }
+
+    /** The configured webhook. */
+    fun getInboxPlacementWebhook(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        priority3Api.inboxPlacementRequest("GET", "/webhook", emptyMap(), null, responseCallback, errorCallback)
+    }
+
+    /** Sets the webhook that test results post to. */
+    fun setInboxPlacementWebhook(
+        webhookUrl: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (invalidApiKey(errorCallback)) return
+        if (webhookUrl.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: webhook_url"))
+            return
+        }
+        priority3Api.inboxPlacementRequest(
+            "PUT",
+            "/webhook",
+            emptyMap(),
+            mapOf("webhookUrl" to webhookUrl),
+            responseCallback,
+            errorCallback,
+        )
+    }
+
+    private fun inboxPlacementTestSegment(
+        testId: String,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): String? {
+        if (testId.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: test_id"))
+            return null
+        }
+        return encPathSegment(testId.trim())
     }
 
     /**
@@ -1557,11 +1807,39 @@ object ZeroBounceSDK {
 
     internal fun priority3BulkApiRootUrl(): String = bulkApiRootUrl
 
+    internal fun priority3ListEvaluatorBaseUrl(): String = listEvaluatorBaseUrl
+
+    internal fun priority3InboxPlacementBaseUrl(): String = inboxPlacementBaseUrl
+
+    /**
+     * Overrides the list evaluator base URL. It is a separate host rather than
+     * a path built from the bulk base, so [initialize] alone does not change it.
+     */
+    fun setListEvaluatorBaseUrl(url: String) {
+        require(isAllowedApiBaseUrl(url)) { "listEvaluatorBaseUrl must be an https:// URL" }
+        listEvaluatorBaseUrl = url.trimEnd('/')
+    }
+
+    /** Overrides the Inbox Placement Tester base URL. See [setListEvaluatorBaseUrl]. */
+    fun setInboxPlacementBaseUrl(url: String) {
+        require(isAllowedApiBaseUrl(url)) { "inboxPlacementBaseUrl must be an https:// URL" }
+        inboxPlacementBaseUrl = url.trimEnd('/')
+    }
+
     internal fun priority3EmailFinderBaseUrl(): String = "$bulkApiRootUrl/email-finder"
 
     internal fun priority3DomainSearchBaseUrl(): String = "$bulkApiRootUrl/domain-search"
 
     internal fun encQuery(value: String): String = enc(value)
+
+    /**
+     * Encodes a value as a single path segment.
+     *
+     * [enc] is form encoding, which turns a space into "+". That is correct in
+     * a query string but means a literal plus in a path, so the file id and the
+     * Inbox Placement test id use this instead.
+     */
+    internal fun encPathSegment(value: String): String = enc(value).replace("+", "%20")
 
     internal fun priority3Client(): OkHttpClient = client
 
@@ -1607,6 +1885,44 @@ object ZeroBounceSDK {
                 val json = response.body?.string()
                 acceptJson(response.code, json, errorCallback) { text ->
                     responseCallback(JsonParser.parseString(text))
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                errorCallback(ErrorResponse.parseError(e.message))
+            }
+        })
+    }
+
+    /**
+     * One Inbox Placement Tester call.
+     *
+     * Unlike the rest of the SDK this one takes camelCase JSON bodies and uses
+     * PUT and DELETE as well as GET and POST, so it builds the request itself.
+     */
+    internal fun priority3JsonRequest(
+        method: String,
+        url: String,
+        body: Map<String, Any?>?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        val builder = Request.Builder().url(url).header("Accept", "application/json")
+        val payload = body?.let {
+            gson.toJson(it).toRequestBody("application/json".toMediaTypeOrNull())
+        }
+        when (method) {
+            "GET" -> builder.get()
+            "DELETE" -> if (payload == null) builder.delete() else builder.delete(payload)
+            else -> builder.method(method, payload ?: ByteArray(0).toRequestBody(null))
+        }
+        client.newCall(builder.build()).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                val json = response.body?.string()
+                acceptJson(response.code, json, errorCallback) { text ->
+                    // DELETE answers with an empty body.
+                    if (text.isBlank()) responseCallback(null)
+                    else responseCallback(JsonParser.parseString(text))
                 }
             }
 
@@ -1707,4 +2023,10 @@ internal class SdkState {
     var bulkApiBaseUrl = "https://bulkapi.zerobounce.net/v2"
     var bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.net/v2/scoring"
     var bulkApiRootUrl = "https://bulkapi.zerobounce.net"
+
+    // The list evaluator and the Inbox Placement Tester have their own base
+    // URLs, not paths built from the bulk one. Overriding apiBaseUrl alone
+    // leaves them pointing at the live API.
+    var listEvaluatorBaseUrl = "https://bulkapi.zerobounce.net/v2/listevaluator"
+    var inboxPlacementBaseUrl = "https://bulkapi.zerobounce.net/api/ipt"
 }

@@ -451,10 +451,108 @@ class ZeroBounceClient {
 
     fun exportS3File(
         fileId: String,
-        exportBucket: String,
+        exportBucket: String?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.exportS3File(fileId, exportBucket, responseCallback, errorCallback) }
+
+    fun emailFinderS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.emailFinderS3File(options, responseCallback, errorCallback) }
+
+    fun domainSearchS3File(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.domainSearchS3File(options, responseCallback, errorCallback) }
+
+    fun validateSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.validateSFTPFile(options, responseCallback, errorCallback) }
+
+    fun scoreSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.scoreSFTPFile(options, responseCallback, errorCallback) }
+
+    fun emailFinderSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.emailFinderSFTPFile(options, responseCallback, errorCallback) }
+
+    fun domainSearchSFTPFile(
+        options: ZBBulkFileJobOptions,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.domainSearchSFTPFile(options, responseCallback, errorCallback) }
+
+    fun exportSFTPFile(
+        fileId: String,
+        exportPath: String?,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.exportSFTPFile(fileId, exportPath, responseCallback, errorCallback) }
+
+    fun getInboxPlacementProviders(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.getInboxPlacementProviders(responseCallback, errorCallback) }
+
+    fun getInboxPlacementTestTypes(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.getInboxPlacementTestTypes(responseCallback, errorCallback) }
+
+    fun createInboxPlacementTest(
+        name: String,
+        options: ZBCreateInboxPlacementTestOptions? = null,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.createInboxPlacementTest(name, options, responseCallback, errorCallback) }
+
+    fun getInboxPlacementTest(
+        testId: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.getInboxPlacementTest(testId, responseCallback, errorCallback) }
+
+    fun listInboxPlacementTests(
+        options: ZBListInboxPlacementTestsOptions? = null,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.listInboxPlacementTests(options, responseCallback, errorCallback) }
+
+    fun deleteInboxPlacementTest(
+        testId: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.deleteInboxPlacementTest(testId, responseCallback, errorCallback) }
+
+    fun getInboxPlacementWebhook(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.getInboxPlacementWebhook(responseCallback, errorCallback) }
+
+    fun setInboxPlacementWebhook(
+        webhookUrl: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = use { ZeroBounceSDK.setInboxPlacementWebhook(webhookUrl, responseCallback, errorCallback) }
+
+    /**
+     * Overrides the list evaluator base URL. It is a separate host rather than
+     * a path built from the bulk base, so [initialize] alone does not change it.
+     */
+    fun setListEvaluatorBaseUrl(url: String) = use { ZeroBounceSDK.setListEvaluatorBaseUrl(url) }
+
+    /** Overrides the Inbox Placement Tester base URL. See [setListEvaluatorBaseUrl]. */
+    fun setInboxPlacementBaseUrl(url: String) = use { ZeroBounceSDK.setInboxPlacementBaseUrl(url) }
 
     private fun <T> use(block: () -> T): T = ZeroBounceSDK.useState(state, block)
 }

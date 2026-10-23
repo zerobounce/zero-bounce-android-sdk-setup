@@ -10,7 +10,7 @@ Guidance for AI coding agents working in this repository.
 
 - `zero_bounce_sdk/src/main/java/com/zerobounce/android/ZeroBounceSDK.kt`: shared client and request helpers.
 - `zero_bounce_sdk/src/main/java/com/zerobounce/android/ZeroBounceClient.kt`: one API key. It delegates through a thread-local `SdkState`.
-- `zero_bounce_sdk/src/main/java/com/zerobounce/android/Priority3Api.kt`: bulk email finder, domain search, list evaluator, filters, S3.
+- `zero_bounce_sdk/src/main/java/com/zerobounce/android/Priority3Api.kt`: bulk email finder, domain search, list evaluator, filters, the S3 / SFTP bulk jobs, and the Inbox Placement Tester transport. The six file jobs share `ZBBulkFileJobOptions` and `bulkRootFileJob`.
 - `zero_bounce_sdk/src/main/java/com/zerobounce/android/HttpMessages.kt`: turns HTML, empty bodies, and parser failures into a short `ErrorResponse`.
 - `zero_bounce_sdk/src/test/java/com/zerobounce/android/OfflineApiTest.kt`: offline suite. A fake OkHttp interceptor records every call. No network and no real API key.
 - `zero_bounce_sdk/build.gradle`: `PUBLISH_VERSION` is the only version to bump.
@@ -36,6 +36,10 @@ The Kotlin compile inside `testDebugUnitTest` is the typecheck. CI (`.github/wor
 - **Tests set `transportInterceptor` before `initialize`.** Do not call the live API from the default test run.
 - **`BuildGradleValidationTest` fails when `PUBLISH_VERSION` appears on a dependency line.** A real dependency may share that number. Add its coordinate to `COORDINATES_ALLOWED_TO_MATCH` only after you confirm the version is that dependency's own. Do not delete or weaken the test.
 - `http://localhost` is allowed as a base URL. Any other non-HTTPS base URL is rejected.
+- **Five base URLs on `SdkState`.** `apiBaseUrl`, `bulkApiBaseUrl` (ends in `/v2`), `bulkApiScoringBaseUrl`, `bulkApiRootUrl` (the S3/SFTP jobs, **no** `/v2`), plus `listEvaluatorBaseUrl` and `inboxPlacementBaseUrl`. The last two are separate hosts rather than paths built from the bulk base, so `initialize` alone leaves them on the live API — use `setListEvaluatorBaseUrl` / `setInboxPlacementBaseUrl`, and reset them in `resetSharedUrls`.
+- **`enc` is form encoding.** It turns a space into `+`, which is correct in a query string but a literal plus in a path. Use `encPathSegment` for anything that goes into a path, such as the list evaluator file id and the Inbox Placement test id.
+- **Two bulk shapes are easy to get wrong.** `validateSFTPFile`'s `fileName` is optional — leaving it null uses the input bucket from the account's settings, and every other job requires it. `exportSFTPFile` sends `export_path`, not the `export_bucket` that `exportS3File` sends.
+- **Only endpoints documented at https://www.zerobounce.net/docs/.** Do not add a method for an endpoint the public docs do not describe. Check before concluding something is undocumented: the S3 and SFTP bulk endpoints live under https://www.zerobounce.net/docs/api-integrations, not the main API reference.
 - Match the surrounding style. Do not reformat unrelated code.
 
 ## Changelog
