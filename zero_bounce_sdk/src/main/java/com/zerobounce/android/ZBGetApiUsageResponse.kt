@@ -145,6 +145,14 @@ data class ZBGetApiUsageResponse(
     @SerializedName("sub_status_role_based_accept_all")
     val subStatusRoleBasedAcceptAll: Int = 0,
 
+    // Total emails with a leading period that was removed
+    @SerializedName("sub_status_leading_period_removed")
+    val subStatusLeadingPeriodRemoved: Int = 0,
+
+    // Total number of times the API has a sub status of "alias_address"
+    @SerializedName("sub_status_alias_address")
+    val subStatusAliasAddress: Int = 0,
+
     // Start date of query
     @SerializedName("start_date")
     val startDate: String? = null,
