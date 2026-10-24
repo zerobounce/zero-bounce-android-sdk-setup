@@ -107,4 +107,33 @@ tasks.withType(Javadoc).configureEach {
     options.addBooleanOption('Xdoclint:none', true)
 }
 
+// The opt-in live API suite. It is a unit test so it can reuse the test
+// dependencies, but the default test task excludes it, so `gradle test` and CI
+// never run it. Run it by hand with keys in the environment:
+//
+//   ZEROBOUNCE_API_KEY=... ZEROBOUNCE_WARMUP_API_KEY=... \
+//     gradle :zero_bounce_sdk:liveApi
+tasks.withType(Test).configureEach {
+    if (!project.hasProperty('zbLive')) {
+        exclude '**/LiveApiTest*'
+    }
+    environment 'ZEROBOUNCE_API_KEY', System.getenv('ZEROBOUNCE_API_KEY') ?: ''
+    environment 'ZEROBOUNCE_WARMUP_API_KEY', System.getenv('ZEROBOUNCE_WARMUP_API_KEY') ?: ''
+    environment 'ZEROBOUNCE_LIVE_SPEND', System.getenv('ZEROBOUNCE_LIVE_SPEND') ?: ''
+    environment 'ZEROBOUNCE_LIVE_CHANGES', System.getenv('ZEROBOUNCE_LIVE_CHANGES') ?: ''
+}
+
+tasks.register('liveApi') {
+    group = 'verification'
+    description = 'Runs the opt-in live API suite against the real ZeroBounce API.'
+    dependsOn 'testDebugUnitTest'
+    doFirst {
+        if (!project.hasProperty('zbLive')) {
+            throw new GradleException(
+                'Run it as: gradle :zero_bounce_sdk:liveApi -PzbLive ' +
+                '--tests "com.zerobounce.android.LiveApiTest"')
+        }
+    }
+}
+
 apply from: "${rootProject.projectDir}/scripts/publish-module.gradle"

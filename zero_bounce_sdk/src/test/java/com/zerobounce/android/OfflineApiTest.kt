@@ -1233,6 +1233,27 @@ class OfflineApiTest {
     }
 
     @Test
+    fun theIsoUploadDateTheLiveApiSendsParses() {
+        // LIVE: bulk filestatus answers with an ISO-8601 upload_date, for
+        // example 2026-10-24T05:24:13Z. It used to fail to parse, and the whole
+        // response then came back as an error.
+        val gson = com.google.gson.GsonBuilder()
+            .registerTypeAdapter(java.util.Date::class.java, GsonDateDeserializer())
+            .create()
+        val accepted = listOf(
+            "2026-10-24T05:24:13Z",
+            "2026-10-24T05:24:13.123Z",
+            "2026-10-24T05:24:13+02:00",
+            "2023-04-18 14:40:08.123",
+            "04/18/2023 2:40:08 PM",
+        )
+        for (text in accepted) {
+            val parsed = gson.fromJson("""{"upload_date":"$text"}""", ZBFileStatusResponse::class.java)
+            assertNotNull("could not parse $text", parsed)
+        }
+    }
+
+    @Test
     fun successFalseOnAnHttp200IsAnError() {
         useSharedKey("success-false-key")
 
