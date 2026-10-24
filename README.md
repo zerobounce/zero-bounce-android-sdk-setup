@@ -464,24 +464,27 @@ These live on the bulkapi host *without* the `/v2` path.
 
 ```kotlin
 // Amazon S3. fileName is the full path, as returned by listS3Files.
-ZeroBounceSDK.emailFinderS3File(
-    ZBBulkFileJobOptions(fileName = "lists/leads.csv", hasHeaderRow = true), ok, error)
-
-ZeroBounceSDK.domainSearchS3File(
-    ZBBulkFileJobOptions(
-        fileName = "lists/leads.csv",
-        removeDuplicates = true,
-        returnUrl = "https://example.com/zerobounce-done",
-    ),
-    ok, error)
+// fileName and returnUrl are required on every one of these jobs.
+val s3 = ZBBulkFileJobOptions(
+    fileName = "lists/leads.csv",
+    hasHeaderRow = true,
+    returnUrl = "https://example.com/zerobounce-done",
+)
+ZeroBounceSDK.emailFinderS3File(s3, ok, error)
+ZeroBounceSDK.domainSearchS3File(s3.copy(removeDuplicates = true), ok, error)
 
 // SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
-// fileName may be left null for validateSFTPFile alone, which then uses the
-// input bucket from those settings.
-ZeroBounceSDK.validateSFTPFile(ZBBulkFileJobOptions(hasHeaderRow = true), ok, error)
-ZeroBounceSDK.scoreSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
-ZeroBounceSDK.emailFinderSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
-ZeroBounceSDK.domainSearchSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
+// The docs list fileName as optional for validateSFTPFile, but the live API
+// requires it there too.
+val sftp = ZBBulkFileJobOptions(
+    fileName = "my_file.txt",
+    hasHeaderRow = true,
+    returnUrl = "https://example.com/zerobounce-done",
+)
+ZeroBounceSDK.validateSFTPFile(sftp, ok, error)
+ZeroBounceSDK.scoreSFTPFile(sftp, ok, error)
+ZeroBounceSDK.emailFinderSFTPFile(sftp, ok, error)
+ZeroBounceSDK.domainSearchSFTPFile(sftp, ok, error)
 
 // Note the field: this one takes export_path, not export_bucket.
 // null uses the export path from your settings.
@@ -490,8 +493,8 @@ ZeroBounceSDK.exportSFTPFile("<FILE_ID>", "/exports", ok, error)
 
 ## Inbox Placement Tester
 
-Runs on its own host, takes the API key on the query string, and sends camelCase
-JSON bodies. It spends the account's inbox-test credits.
+Runs on its own host, authenticates with an `Authorization: Bearer` header, and
+sends camelCase JSON bodies. It spends the account's inbox-test credits.
 
 ```kotlin
 ZeroBounceSDK.getInboxPlacementProviders(ok, error)
@@ -525,6 +528,63 @@ The list evaluator and the Inbox Placement Tester are separate hosts, so
 ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulkapi.zerobounce.net/v2/listevaluator")
 ZeroBounceSDK.setInboxPlacementBaseUrl("https://bulkapi.zerobounce.net/api/ipt")
 ```
+
+## Warmup API
+
+The Warmup API is a separate product. It has its own host, its own team-scoped key, and its own client; your validation key will not work with it.
+
+```kotlin
+val warmup = ZeroBounceWarmup()
+warmup.initialize("<YOUR_WARMUP_API_KEY>")
+
+warmup.listSendingAccounts(ok, error)
+warmup.getProgressToday(ok, error)
+warmup.downloadSeeds({ csv -> println(csv) }, error)   // columns seed,provider
+```
+
+Add a from-address you run yourself, with one of the five standard engagement rules (0 Default, 1 Slow Pace, 2 Repair, 3 Boost, 4 Protect):
+
+```kotlin
+warmup.addSendingAccount(
+    "sender@example.com", "self_managed",
+    ZBWarmupAddSendingAccountOptions(engagementRuleId = 0), ok, error)
+```
+
+A custom engagement rule can be changed only once every seven days; inside that window the API answers 429.
+
+```kotlin
+warmup.createCustomEngagement("sender@example.com", 20, 20, 35, ok, error)  // reply, important, click %
+```
+
+`checkDomainDmarc` takes an **email address**, not a domain — the live API rejects a bare domain even though the docs describe one:
+
+```kotlin
+warmup.checkDomainDmarc("sender@example.com", null, ok, error)
+```
+
+Every documented empty success (204, or an empty 200) arrives as a `null` payload, and a payload that is not a JSON object — `/seeds` is an array, `/seed-count` a bare number — arrives as that `JsonElement`. Failures carry the HTTP status on `ErrorResponse.statusCode`. Nothing is stored by `testSmtpConfiguration`, and the credentials you pass it are masked out of any error it raises.
+
+## Live API suite
+
+`gradle test` never touches the network: the live suite is excluded from the default test task unless you pass `-PzbLive`, so CI never runs it. It needs real keys, which come from the environment and are never written anywhere:
+
+```bash
+export ZEROBOUNCE_API_KEY=...          # validation API
+export ZEROBOUNCE_WARMUP_API_KEY=...   # Warmup API
+./gradlew :zero_bounce_sdk:testDebugUnitTest -PzbLive \
+  --tests "com.zerobounce.android.LiveApiTest"
+```
+
+By default it only makes free calls: sandbox addresses, reads, and requests that are expected to fail but still prove the API accepts the payload. It checks that the credit balance did not move. Two flags opt in to more:
+
+| Flag | What it adds |
+| --- | --- |
+| `ZEROBOUNCE_LIVE_SPEND=1` | billable calls (scoring, activity, email finder) and a bulk round trip that deletes its own job |
+| `ZEROBOUNCE_LIVE_CHANGES=1` | reversible account changes — a test filter and a self-managed Warmup sending account — each undone in cleanup even when a check fails |
+
+It never creates an Inbox Placement test, sets the Inbox Placement webhook, or starts ZB-managed Warmup onboarding, because the API cannot undo any of those.
+
+Run it by hand before every release: the offline suite proves the SDK sends what we think it sends, and only the live suite proves the API accepts it.
 
 ## Testing
 
