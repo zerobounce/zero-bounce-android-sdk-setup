@@ -234,15 +234,27 @@ internal class Priority3Api {
         )
     }
 
+    /**
+     * Submits a finished evaluation for validation. POST /v2/send-evaluated-file/
+     *
+     * LIVE: this takes the list evaluator's file_id as a form field, not the
+     * file upload the docs describe - an upload is rejected with
+     * "file_id: This field is required". It returns a new validation job's
+     * file_id, which answers "File cannot be found" for a short while after it
+     * is accepted.
+     */
     fun sendEvaluatedFile(
-        file: File,
+        fileId: String,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
-        sendBulkRootMultipart(
+        if (fileId.isBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: file_id"))
+            return
+        }
+        postBulkRootFormAt(
             "${ZeroBounceSDK.priority3BulkApiBaseUrl()}/send-evaluated-file/",
-            file,
-            emptyMap(),
+            mapOf("file_id" to fileId.trim()),
             responseCallback,
             errorCallback,
         )
@@ -374,13 +386,13 @@ internal class Priority3Api {
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/emailFinderS3file", options, true, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/emailFinderS3file", options, responseCallback, errorCallback)
 
     fun domainSearchS3File(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/domainSearchS3file", options, true, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/domainSearchS3file", options, responseCallback, errorCallback)
 
     // SFTP / FTP bulk. The server, path and protocol are never sent by the SDK;
     // they come from your ZeroBounce settings.
@@ -389,25 +401,25 @@ internal class Priority3Api {
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/validateSFTPfile", options, false, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/validateSFTPfile", options, responseCallback, errorCallback)
 
     fun scoreSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/scoreSFTPfile", options, true, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/scoreSFTPfile", options, responseCallback, errorCallback)
 
     fun emailFinderSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/emailFinderSFTPfile", options, true, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/emailFinderSFTPfile", options, responseCallback, errorCallback)
 
     fun domainSearchSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = bulkRootFileJob("/domainSearchSFTPfile", options, true, responseCallback, errorCallback)
+    ) = bulkRootFileJob("/domainSearchSFTPfile", options, responseCallback, errorCallback)
 
     /**
      * Exports a validated or scored file back to your SFTP/FTP server.
@@ -440,22 +452,33 @@ internal class Priority3Api {
      * Booleans go on the wire as the strings "true"/"false", and an option the
      * caller left unset is not sent at all.
      */
+    /**
+     * POSTs one of the six documented S3 / SFTP file jobs on the bulkapi root.
+     *
+     * LIVE: file_name and return_url are required on every one of them,
+     * validateSFTPfile included, although the docs list file_name as optional
+     * for that one. Without either the API answers "This field is required".
+     */
     private fun bulkRootFileJob(
         path: String,
         options: ZBBulkFileJobOptions,
-        fileNameRequired: Boolean,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
-        val blank = options.fileName != null && options.fileName.isBlank()
-        if ((options.fileName == null && fileNameRequired) || blank) {
+        if (options.fileName.isNullOrBlank()) {
             errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
             return
         }
-        val fields = mutableMapOf("has_header_row" to options.hasHeaderRow.toString())
-        options.fileName?.let { fields["file_name"] = it }
+        if (options.returnUrl.isNullOrBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: return_url"))
+            return
+        }
+        val fields = mutableMapOf(
+            "has_header_row" to options.hasHeaderRow.toString(),
+            "file_name" to options.fileName,
+            "return_url" to options.returnUrl,
+        )
         options.removeDuplicates?.let { fields["remove_duplicates"] = it.toString() }
-        options.returnUrl?.let { fields["return_url"] = it }
         postBulkRootForm(path, fields, responseCallback, errorCallback)
     }
 
@@ -497,17 +520,20 @@ internal class Priority3Api {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         val key = ZeroBounceSDK.priority3ApiKey() ?: return
-        // The API key goes on the query string here, not in the body.
-        val params = query + mapOf("api_key" to key)
-        val queryString = params.entries.joinToString("&") { (k, v) ->
+        // LIVE: the Inbox Placement Tester authenticates with a Bearer header.
+        // Sent as an api_key parameter the request is rejected as unauthorized,
+        // and the key would end up in a query string that gets logged.
+        val queryString = query.entries.joinToString("&") { (k, v) ->
             "${ZeroBounceSDK.encQuery(k)}=${ZeroBounceSDK.encQuery(v)}"
         }
+        val suffix = if (queryString.isEmpty()) "" else "?$queryString"
         ZeroBounceSDK.priority3JsonRequest(
             method,
-            "${ZeroBounceSDK.priority3InboxPlacementBaseUrl()}$path?$queryString",
+            "${ZeroBounceSDK.priority3InboxPlacementBaseUrl()}$path$suffix",
             body,
             responseCallback,
             errorCallback,
+            mapOf("Authorization" to "Bearer $key"),
         )
     }
 
@@ -516,16 +542,24 @@ internal class Priority3Api {
         fields: Map<String, String>,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = postBulkRootFormAt(
+        "${ZeroBounceSDK.priority3BulkApiRootUrl()}$path",
+        fields,
+        responseCallback,
+        errorCallback,
+    )
+
+    /** A form POST to an arbitrary bulk URL, for the endpoints off the root. */
+    private fun postBulkRootFormAt(
+        url: String,
+        fields: Map<String, String>,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         val key = ZeroBounceSDK.priority3ApiKey() ?: return
         val form = fields.toMutableMap()
         form["api_key"] = key
-        ZeroBounceSDK.priority3FormPost(
-            "${ZeroBounceSDK.priority3BulkApiRootUrl()}$path",
-            form,
-            responseCallback,
-            errorCallback,
-        )
+        ZeroBounceSDK.priority3FormPost(url, form, responseCallback, errorCallback)
     }
 
     private fun sendBulkRootMultipart(

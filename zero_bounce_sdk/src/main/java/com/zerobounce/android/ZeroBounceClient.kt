@@ -403,10 +403,10 @@ class ZeroBounceClient {
     ) = use { ZeroBounceSDK.getListEvaluatorResult(fileId, responseCallback, errorCallback) }
 
     fun sendEvaluatedFile(
-        file: File,
+        fileId: String,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) = use { ZeroBounceSDK.sendEvaluatedFile(file, responseCallback, errorCallback) }
+    ) = use { ZeroBounceSDK.sendEvaluatedFile(fileId, responseCallback, errorCallback) }
 
     fun addFilter(
         rule: String,

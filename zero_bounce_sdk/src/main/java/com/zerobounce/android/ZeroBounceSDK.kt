@@ -285,7 +285,10 @@ object ZeroBounceSDK {
             "api_key" to apiKey,
             "email_batch" to emails
         )
-        options?.timeout?.let { body["timeout"] = it }
+        // LIVE: validatebatch takes timeout as a JSON *string*. Sent as a
+        // number the API rejects the whole batch with the account-level
+        // "Invalid API Key or your account ran out of credits".
+        options?.timeout?.let { body["timeout"] = it.toString() }
         options?.activityData?.let { body["activity_data"] = it }
         options?.verifyPlus?.let { body["verify_plus"] = it }
 
@@ -1321,13 +1324,19 @@ object ZeroBounceSDK {
         priority3Api.getListEvaluatorResult(fileId, responseCallback, errorCallback)
     }
 
+    /**
+     * Submits a finished evaluation for validation. POST /v2/send-evaluated-file/
+     *
+     * LIVE: this takes the list evaluator's file_id as a form field, not the
+     * file upload the docs describe.
+     */
     fun sendEvaluatedFile(
-        file: File,
+        fileId: String,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
-        priority3Api.sendEvaluatedFile(file, responseCallback, errorCallback)
+        priority3Api.sendEvaluatedFile(fileId, responseCallback, errorCallback)
     }
 
     fun addFilter(
@@ -1554,7 +1563,9 @@ object ZeroBounceSDK {
         options?.status?.let { query["status"] = it }
         options?.page?.let { query["page"] = it.toString() }
         options?.pageSize?.let { query["pageSize"] = it.toString() }
-        priority3Api.inboxPlacementRequest("GET", "/test", query, null, responseCallback, errorCallback)
+        // LIVE: the listing is GET /tests (plural). /test is the single-test
+        // path and answers Method "GET" not allowed.
+        priority3Api.inboxPlacementRequest("GET", "/tests", query, null, responseCallback, errorCallback)
     }
 
     /** Deletes one test. */
@@ -1906,8 +1917,10 @@ object ZeroBounceSDK {
         body: Map<String, Any?>?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        extraHeaders: Map<String, String> = emptyMap(),
     ) {
         val builder = Request.Builder().url(url).header("Accept", "application/json")
+        extraHeaders.forEach { (name, value) -> builder.header(name, value) }
         val payload = body?.let {
             gson.toJson(it).toRequestBody("application/json".toMediaTypeOrNull())
         }

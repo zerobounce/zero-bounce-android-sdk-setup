@@ -203,7 +203,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -374,7 +374,7 @@ class ZeroBounceSDKTest {
                 "          }\n" +
                 "      ]\n" +
                 "    }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -490,7 +490,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -586,7 +586,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -733,7 +733,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -859,7 +859,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"Credits\":-1}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -982,7 +982,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":\"Invalid API Key\"}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1500,7 +1500,7 @@ class ZeroBounceSDKTest {
                 "          \"Error messages\"\n" +
                 "      ]\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualErrorJson: Any? = null
@@ -1555,7 +1555,7 @@ class ZeroBounceSDKTest {
                 "          \"Error messages\"\n" +
                 "      ]\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualErrorJson: Any? = null
@@ -1602,7 +1602,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1645,7 +1645,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1688,7 +1688,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1731,7 +1731,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Phase 2 download types are only available when phase 2 is enabled for this file.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 200)
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -1792,7 +1792,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1836,7 +1836,7 @@ class ZeroBounceSDKTest {
                 "  \"success\": false,\n" +
                 "  \"message\": \"File cannot be found.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1879,7 +1879,7 @@ class ZeroBounceSDKTest {
                 "  \"success\": false,\n" +
                 "  \"message\": \"File cannot be found.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1971,7 +1971,7 @@ class ZeroBounceSDKTest {
                 "  \"found\": false,\n" +
                 "  \"active_in_days\": null\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null

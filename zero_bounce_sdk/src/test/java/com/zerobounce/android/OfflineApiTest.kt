@@ -539,8 +539,13 @@ class OfflineApiTest {
         assertTrue(result.value.toString().contains("p3-key"))
         assertEquals("/v2/listevaluator/fid/", onlyRequest().path)
 
-        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.sendEvaluatedFile(csvFile, ok, err) }
-        assertEquals("/v2/send-evaluated-file/", onlyRequest().path)
+        // LIVE: send-evaluated-file takes the evaluator's file_id as a form
+        // field, not the file upload the docs describe.
+        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.sendEvaluatedFile("eval-file-1", ok, err) }
+        val evaluated = onlyRequest()
+        assertEquals("/v2/send-evaluated-file/", evaluated.path)
+        assertEquals("POST", evaluated.method)
+        assertEquals("eval-file-1", evaluated.fields["file_id"])
 
         await<com.google.gson.JsonElement> { ok, err ->
             ZeroBounceSDK.addFilter("exclude", "domain", "example.com", ok, err)
@@ -1004,7 +1009,12 @@ class OfflineApiTest {
 
         await<ZBSendFileResponse> { ok, err ->
             ZeroBounceSDK.emailFinderS3File(
-                ZBBulkFileJobOptions(fileName = "lists/leads.csv", hasHeaderRow = true), ok, err,
+                ZBBulkFileJobOptions(
+                    fileName = "lists/leads.csv",
+                    hasHeaderRow = true,
+                    returnUrl = "https://example.com/done",
+                ),
+                ok, err,
             )
         }
         var request = onlyRequest()
@@ -1014,9 +1024,9 @@ class OfflineApiTest {
         assertEquals("/emailFinderS3file", request.path)
         assertEquals("lists/leads.csv", request.fields["file_name"])
         assertEquals("true", request.fields["has_header_row"])
+        assertEquals("https://example.com/done", request.fields["return_url"])
         // Unset options stay off the request entirely.
         assertFalse(request.fields.containsKey("remove_duplicates"))
-        assertFalse(request.fields.containsKey("return_url"))
 
         await<ZBSendFileResponse> { ok, err ->
             ZeroBounceSDK.domainSearchS3File(
@@ -1035,17 +1045,17 @@ class OfflineApiTest {
         assertEquals("true", request.fields["remove_duplicates"])
         assertEquals("https://example.com/done", request.fields["return_url"])
 
-        // file_name is optional for validateSFTPfile alone: without it the
-        // input bucket from the account's settings is used.
-        await<ZBSendFileResponse> { ok, err ->
-            ZeroBounceSDK.validateSFTPFile(ZBBulkFileJobOptions(hasHeaderRow = true), ok, err)
-        }
+        // LIVE: file_name is required here too, although the docs list it as
+        // optional for this one endpoint.
+        val named = ZBBulkFileJobOptions(
+            fileName = "my_file.txt",
+            returnUrl = "https://example.com/done",
+        )
+        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.validateSFTPFile(named, ok, err) }
         request = onlyRequest()
         assertEquals("/validateSFTPfile", request.path)
-        assertFalse(request.fields.containsKey("file_name"))
+        assertEquals("my_file.txt", request.fields["file_name"])
         assertEquals("true", request.fields["has_header_row"])
-
-        val named = ZBBulkFileJobOptions(fileName = "my_file.txt")
         val jobs = listOf<Pair<String, (ZBBulkFileJobOptions, (ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>>(
             "/validateSFTPfile" to ZeroBounceSDK::validateSFTPFile,
             "/scoreSFTPfile" to ZeroBounceSDK::scoreSFTPFile,
@@ -1138,8 +1148,10 @@ class OfflineApiTest {
         }
         var request = onlyRequest()
         assertEquals("/api/ipt/providers", request.path)
-        // The API key goes on the query string here, not in the body.
-        assertEquals("ipt-key", request.apiKey)
+        // LIVE: the Inbox Placement Tester authenticates with a Bearer header,
+        // and the key must not reach the query string, where it would be logged.
+        assertEquals("Bearer ipt-key", request.authorization)
+        assertNull(request.fields["api_key"])
 
         await<com.google.gson.JsonElement> { ok, err ->
             ZeroBounceSDK.getInboxPlacementTestTypes(ok, err)
@@ -1217,6 +1229,66 @@ class OfflineApiTest {
             ZeroBounceSDK.setInboxPlacementWebhook("", ok, err)
         }
         assertTrue(webhook.errorText().orEmpty().contains("webhook_url"))
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun successFalseOnAnHttp200IsAnError() {
+        useSharedKey("success-false-key")
+
+        // LIVE: the API answers an unknown file id with an HTTP 200 whose body
+        // says success: false.
+        val outcome = await<ZBFileStatusResponse> { ok, err ->
+            ZeroBounceSDK.fileStatus("0d1b7a4e-1111-2222-3333-444455556666", ok, err)
+        }
+        assertTrue(outcome.errorText().orEmpty().contains("File cannot be found."))
+        assertEquals(200, outcome.error?.statusCode)
+    }
+
+    @Test
+    fun validateBatchSendsTimeoutAsAString() {
+        useSharedKey("batch-key")
+
+        // LIVE: sent as a JSON number the API rejects the whole batch with the
+        // account-level "Invalid API Key or your account ran out of credits".
+        await<ZBValidateBatchResponse> { ok, err ->
+            ZeroBounceSDK.validateBatch(
+                listOf(ZBValidateBatchData("a@example.com", null)),
+                ZBValidateOptions(timeout = 30, verifyPlus = true),
+                ok,
+                err,
+            )
+        }
+        val request = onlyRequest()
+        assertEquals("30", request.fields["timeout"])
+        assertEquals("true", request.fields["verify_plus"])
+    }
+
+    @Test
+    fun bulkJobsRequireFileNameAndReturnUrl() {
+        useSharedKey("bulk-key")
+        val done = "https://example.com/done"
+
+        // LIVE: both fields are required on every one of these jobs.
+        val jobs = listOf<(ZBBulkFileJobOptions, (ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>(
+            ZeroBounceSDK::emailFinderS3File,
+            ZeroBounceSDK::domainSearchS3File,
+            ZeroBounceSDK::validateSFTPFile,
+            ZeroBounceSDK::scoreSFTPFile,
+            ZeroBounceSDK::emailFinderSFTPFile,
+            ZeroBounceSDK::domainSearchSFTPFile,
+        )
+        for (job in jobs) {
+            val missingName = await<ZBSendFileResponse> { ok, err ->
+                job(ZBBulkFileJobOptions(returnUrl = done), ok, err)
+            }
+            assertTrue(missingName.errorText().orEmpty().contains("file_name"))
+
+            val missingUrl = await<ZBSendFileResponse> { ok, err ->
+                job(ZBBulkFileJobOptions(fileName = "f.csv"), ok, err)
+            }
+            assertTrue(missingUrl.errorText().orEmpty().contains("return_url"))
+        }
         assertEquals(0, fake.size())
     }
 
@@ -1343,6 +1415,8 @@ internal class RecordedRequest(
     val apiKey: String,
     val fields: Map<String, String>,
     val userAgent: String?,
+    /** The Authorization header, for the Inbox Placement Tester's Bearer key. */
+    val authorization: String? = null,
 )
 
 internal class FakeApi : Interceptor {
@@ -1363,13 +1437,19 @@ internal class FakeApi : Interceptor {
             fields[name] = request.url.queryParameter(name).orEmpty()
         }
         readBody(request.body, fields)
+        val authorization = request.header("Authorization")
         val recorded = RecordedRequest(
             method = request.method,
             host = request.url.host,
             path = request.url.encodedPath,
-            apiKey = fields["api_key"].orEmpty(),
+            // The Inbox Placement Tester authenticates with a Bearer header
+            // rather than an api_key parameter, so the key can arrive either way.
+            apiKey = fields["api_key"]
+                ?: authorization?.removePrefix("Bearer ")?.takeIf { it != authorization }
+                ?: "",
             fields = fields,
             userAgent = request.header("User-Agent"),
+            authorization = authorization,
         )
         records.add(recorded)
         Thread.sleep(Random.nextInt(21).toLong())
@@ -1432,6 +1512,15 @@ internal class FakeApi : Interceptor {
         if (key.startsWith("html-403-") || key.startsWith("html-200-")) {
             val code = if (key.startsWith("html-403-")) 403 else 200
             return Answer(code, "text/html; charset=UTF-8", accessDeniedPage())
+        }
+        if (key.startsWith("success-false-")) {
+            // LIVE: an unknown file id comes back as an HTTP 200 whose body
+            // says the call failed.
+            return Answer(
+                200,
+                "application/json",
+                """{"success":false,"message":"File cannot be found."}""",
+            )
         }
         if (key.startsWith("empty-")) {
             return Answer(200, "application/json", "")

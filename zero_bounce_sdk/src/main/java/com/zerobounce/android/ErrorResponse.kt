@@ -18,10 +18,21 @@ data class ErrorResponse(
 
     var success: Boolean? = null,
 
-    var errors: ArrayList<String> = arrayListOf()
+    var errors: ArrayList<String> = arrayListOf(),
+
+    /**
+     * The HTTP status of the failed response, or 0 when the failure never
+     * reached the API. It lets callers tell a 403 from Cloudflare apart from a
+     * 400/404 from the API and a 429 from the Warmup rate limit.
+     */
+    var statusCode: Int = 0,
 ) {
 
     companion object {
+        /** The same as [parseError], with the HTTP status attached. */
+        fun parseError(error: String?, statusCode: Int): ErrorResponse =
+            parseError(error).also { it.statusCode = statusCode }
+
         /**
          * Tries to parse the given [error] String into a LinkedHashMap (i.e.: a dictionary
          * structure) in order to provide a standardized way of handling the various error
