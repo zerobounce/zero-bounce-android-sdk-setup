@@ -45,9 +45,11 @@ class ZeroBounceSDKTest {
             File(ZeroBounceSDKTest::class.java.getResource("/")?.path!!)
         )
         server.start()
+        ZeroBounceSDK.transportInterceptor = null
         // Prepare the server's url and overwrite the ZeroBounceSDK's base url
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()
+        ZeroBounceSDK.bulkApiRootUrl = server.url("/").toString()
         ZeroBounceSDK.initialize(API_KEY, apiBaseUrl = server.url("/").toString())
     }
 
@@ -120,12 +122,88 @@ class ZeroBounceSDKTest {
     }
 
     @Test
+    fun validateEmail_WithOptions_SendsQueryParams() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson =
+            "{\"address\":\"flowerjill@aol.com\",\"status\":\"valid\",\"sub_status\":\"\",\"processed_at\":\"2017-04-01 02:48:02.592\"}"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        ZeroBounceSDK.validate(
+            "flowerjill@aol.com",
+            null,
+            ZBValidateOptions(timeout = 30, activityData = true, verifyPlus = false),
+            { countDownLatch.countDown() },
+            { countDownLatch.countDown() }
+        )
+
+        val request = server.takeRequest()
+        countDownLatch.await()
+        assertEquals("30", request.requestUrl?.queryParameter("timeout"))
+        assertEquals("true", request.requestUrl?.queryParameter("activity_data"))
+        assertEquals("false", request.requestUrl?.queryParameter("verify_plus"))
+    }
+
+    @Test
+    fun validateEmail_AiAgentMailbox_Valid() {
+        assertSubStatusParsed("valid", "ai_agent_mailbox", ZBValidateSubStatus.AI_AGENT_MAILBOX)
+    }
+
+    @Test
+    fun validateEmail_AiAgentMailbox_CatchAll() {
+        assertSubStatusParsed("catch-all", "ai_agent_mailbox", ZBValidateSubStatus.AI_AGENT_MAILBOX)
+    }
+
+    @Test
+    fun validateEmail_UnknownSubStatus_IsNullNotAnError() {
+        // Gson maps an unrecognised enum constant to null rather than throwing,
+        // so a sub_status added to the API after this SDK shipped degrades to
+        // null instead of failing the whole validate call.
+        assertSubStatusParsed("valid", "some_future_sub_status", null)
+    }
+
+    /** Validates one email whose response carries the given status/sub_status and checks the parsed enum. */
+    private fun assertSubStatusParsed(
+        status: String,
+        subStatus: String,
+        expected: ZBValidateSubStatus?
+    ) {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\n" +
+                "        \"address\":\"agent@example.com\",\n" +
+                "        \"status\":\"$status\",\n" +
+                "        \"sub_status\":\"$subStatus\"\n" +
+                "        }"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.validate(
+            "agent@example.com",
+            null,
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            })
+
+        if (actualResponse == null) {
+            server.takeRequest()
+        }
+        countDownLatch.await()
+
+        assertTrue(actualResponse is ZBValidateResponse)
+        assertEquals(expected, (actualResponse as ZBValidateResponse).subStatus)
+    }
+
+    @Test
     fun validateEmail_ReturnsError() {
         val countDownLatch = CountDownLatch(1)
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -296,7 +374,7 @@ class ZeroBounceSDKTest {
                 "          }\n" +
                 "      ]\n" +
                 "    }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -412,7 +490,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -508,7 +586,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -655,7 +733,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":[\"Invalid API Key or your account ran out of credits\"]}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -781,7 +859,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"Credits\":-1}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
@@ -904,7 +982,7 @@ class ZeroBounceSDKTest {
 
         // Prepare mock response and add it to the server
         val responseJson = "{\"error\":\"Invalid API Key\"}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1422,7 +1500,7 @@ class ZeroBounceSDKTest {
                 "          \"Error messages\"\n" +
                 "      ]\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualErrorJson: Any? = null
@@ -1477,7 +1555,7 @@ class ZeroBounceSDKTest {
                 "          \"Error messages\"\n" +
                 "      ]\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualErrorJson: Any? = null
@@ -1524,7 +1602,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1567,7 +1645,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "  }"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1610,7 +1688,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1653,7 +1731,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Phase 2 download types are only available when phase 2 is enabled for this file.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 200)
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -1714,7 +1792,7 @@ class ZeroBounceSDKTest {
                 "    \"success\": false,\n" +
                 "    \"message\": \"Error messages\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1758,7 +1836,7 @@ class ZeroBounceSDKTest {
                 "  \"success\": false,\n" +
                 "  \"message\": \"File cannot be found.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1801,7 +1879,7 @@ class ZeroBounceSDKTest {
                 "  \"success\": false,\n" +
                 "  \"message\": \"File cannot be found.\"\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1893,7 +1971,7 @@ class ZeroBounceSDKTest {
                 "  \"found\": false,\n" +
                 "  \"active_in_days\": null\n" +
                 "}"
-        val errorResponse = ErrorResponse.parseError(responseJson)
+        val errorResponse = ErrorResponse.parseError(responseJson, 400)
         server.enqueue(MockResponse().setResponseCode(400).setBody(responseJson))
 
         var actualResponse: Any? = null
@@ -1925,6 +2003,175 @@ class ZeroBounceSDKTest {
 
         // Test that the response from the server matches the expected response.
         assertEquals(errorResponse, actualResponse)
+    }
+
+    @Test
+    fun scoreEmail_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"email\":\"mark@gmail.com\",\"score\":10}"
+        val expectedResponse = gson.fromJson(responseJson, ZBScoreEmailResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        ZeroBounceSDK.scoreEmail(
+            "mark@gmail.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            }
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals(API_KEY, request.requestUrl?.queryParameter("api_key"))
+            assertEquals("mark@gmail.com", request.requestUrl?.queryParameter("email"))
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/scoring") == true)
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        assertTrue(actualResponse is ZBScoreEmailResponse)
+    }
+
+    @Test
+    fun scoreEmailPost_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"email\":\"mark@gmail.com\",\"score\":10}"
+        val expectedResponse = gson.fromJson(responseJson, ZBScoreEmailResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+
+        ZeroBounceSDK.scoreEmailPost(
+            "mark@gmail.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            }
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/scoring") == true)
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("api_key=$API_KEY"))
+            assertTrue(body.contains("email=mark%40gmail.com") || body.contains("email=mark@gmail.com"))
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        assertTrue(actualResponse is ZBScoreEmailResponse)
+    }
+
+    @Test
+    fun sendEmailFinderFile_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true,\"file_id\":\"f1\",\"file_name\":\"out.csv\"}"
+        val expectedResponse = gson.fromJson(responseJson, ZBSendFileResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        val csvFile = File.createTempFile("finder", ".csv")
+        csvFile.writeText("domain,name\nacme.com,Jane\n")
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.sendEmailFinderFile(
+            csvFile,
+            1,
+            null,
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.contains("email-finder") == true)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/sendfile") == true)
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+        csvFile.delete()
+    }
+
+    @Test
+    fun validateS3File_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true,\"file_id\":\"s3-1\"}"
+        val expectedResponse = gson.fromJson(responseJson, ZBSendFileResponse::class.java)
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.validateS3File(
+            ZBValidateS3FileOptions(fileName = "bucket/key.csv"),
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/validateS3file") == true)
+            val body = request.body.readUtf8()
+            assertTrue(body.contains("file_name=bucket%2Fkey.csv") || body.contains("file_name=bucket/key.csv"))
+        }
+
+        countDownLatch.await()
+        assertEquals(expectedResponse, actualResponse)
+    }
+
+    @Test
+    fun addFilter_ReturnsSuccess() {
+        val countDownLatch = CountDownLatch(1)
+        val responseJson = "{\"success\":true}"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
+
+        var actualResponse: Any? = null
+        ZeroBounceSDK.addFilter(
+            "allow",
+            "email",
+            "user@example.com",
+            { rsp ->
+                actualResponse = rsp
+                countDownLatch.countDown()
+            },
+            { error ->
+                actualResponse = error
+                countDownLatch.countDown()
+            },
+        )
+
+        if (actualResponse == null) {
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertTrue(request.requestUrl?.encodedPath?.endsWith("/filters/add") == true)
+        }
+
+        countDownLatch.await()
+        assertTrue(actualResponse is com.google.gson.JsonElement)
     }
 
     @Test

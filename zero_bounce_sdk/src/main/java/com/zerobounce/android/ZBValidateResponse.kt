@@ -32,6 +32,12 @@ data class ZBValidateResponse(
     @SerializedName("domain_age_days")
     val domainAgeDays: String? = null,
 
+    @SerializedName("active_in_days")
+    val activeInDays: String? = null,
+
+    @SerializedName("active_first_seen")
+    val activeFirstSeen: String? = null,
+
     // [true/false] If the email comes from a free provider.
     @SerializedName("free_email")
     val freeEmail: Boolean = false,
@@ -79,6 +85,19 @@ data class ZBValidateResponse(
     // The UTC time the email was validated.
     @SerializedName("processed_at")
     val processedAt: Date? = null,
+
+    // Returned with domain_info.
+    @SerializedName("domain_website_exists")
+    val domainWebsiteExists: String? = null,
+
+    // Returned with domain_info.
+    @SerializedName("domain_registrant_company_name")
+    val domainRegistrantCompanyName: String? = null,
+
+    // The API's "Message" key, returned instead of a result while a greylist
+    // retry is still running.
+    @SerializedName("Message")
+    val message: String? = null,
 
     val error: String? = null
 ) : JSONConvertable
