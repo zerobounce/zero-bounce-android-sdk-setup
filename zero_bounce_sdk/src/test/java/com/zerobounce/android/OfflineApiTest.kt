@@ -436,7 +436,13 @@ class OfflineApiTest {
             ZeroBounceSDK.sendEmailFinderFile(
                 csvFile,
                 1,
-                ZBEmailFinderSendFileOptions(hasHeaderRow = false, firstNameColumn = 0),
+                // A full name column satisfies the name requirement, and the
+                // 0 first name column is still left out.
+                ZBEmailFinderSendFileOptions(
+                    hasHeaderRow = false,
+                    firstNameColumn = 0,
+                    fullNameColumn = 2,
+                ),
                 ok,
                 err,
             )
@@ -446,6 +452,7 @@ class OfflineApiTest {
         assertEquals("/email-finder/sendfile", sent.path)
         assertEquals("1", sent.fields["domain_column"])
         assertEquals("false", sent.fields["has_header_row"])
+        assertEquals("2", sent.fields["full_name_column"])
         assertFalse(sent.fields.containsKey("first_name_column"))
         assertEquals("p3-key", sent.apiKey)
 
@@ -454,7 +461,7 @@ class OfflineApiTest {
                 ByteArrayInputStream("example.com\n".toByteArray()),
                 "finder.csv",
                 2,
-                ZBEmailFinderSendFileOptions(lastNameColumn = 3),
+                ZBEmailFinderSendFileOptions(firstNameColumn = 1, lastNameColumn = 3),
                 ok,
                 err,
             )
@@ -462,6 +469,7 @@ class OfflineApiTest {
         val streamed = onlyRequest()
         assertEquals("/email-finder/sendfile", streamed.path)
         assertEquals("2", streamed.fields["domain_column"])
+        assertEquals("1", streamed.fields["first_name_column"])
         assertEquals("3", streamed.fields["last_name_column"])
         assertFalse(streamed.fields.containsKey("has_header_row"))
 
@@ -581,6 +589,7 @@ class OfflineApiTest {
                     emailAddressColumn = 0,
                     hasHeaderRow = false,
                     removeDuplicate = true,
+                    returnUrl = "https://example.com/done",
                 ),
                 ok,
                 err,
@@ -590,6 +599,7 @@ class OfflineApiTest {
         assertEquals("POST", validated.method)
         assertEquals("/validateS3file", validated.path)
         assertEquals("inbox.csv", validated.fields["file_name"])
+        assertEquals("https://example.com/done", validated.fields["return_url"])
         assertEquals("0", validated.fields["email_address_column"])
         assertEquals("false", validated.fields["has_header_row"])
         assertEquals("true", validated.fields["remove_duplicate"])
@@ -597,10 +607,16 @@ class OfflineApiTest {
         assertFalse(validated.fields.containsKey("first_name_column"))
 
         await<ZBSendFileResponse> { ok, err ->
-            ZeroBounceSDK.scoreS3File(ZBScoreS3FileOptions(fileName = "inbox.csv"), ok, err)
+            ZeroBounceSDK.scoreS3File(
+                ZBScoreS3FileOptions(fileName = "inbox.csv", returnUrl = "https://example.com/done"),
+                ok,
+                err,
+            )
         }
         val scored = onlyRequest()
         assertEquals("/scoreS3file", scored.path)
+        assertEquals("inbox.csv", scored.fields["file_name"])
+        assertEquals("https://example.com/done", scored.fields["return_url"])
         assertFalse(scored.fields.containsKey("email_address_column"))
 
         await<ZBSendFileResponse> { ok, err ->
@@ -670,6 +686,10 @@ class OfflineApiTest {
             ZeroBounceSDK.sendEmailFinderFile(csvFile, 0, null, ok, err)
         }
         assertTrue(badColumn.errorText()!!.contains("domain_column"))
+        val noNameColumn = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendEmailFinderFile(csvFile, 1, null, ok, err)
+        }
+        assertTrue(noNameColumn.errorText()!!.contains("first_name_column or full_name_column"))
         val missingName = await<ZBSendFileResponse> { ok, err ->
             ZeroBounceSDK.validateS3File(ZBValidateS3FileOptions(fileName = "  "), ok, err)
         }
@@ -1096,8 +1116,8 @@ class OfflineApiTest {
             ZeroBounceSDK::domainSearchS3File,
             ZeroBounceSDK::scoreSFTPFile,
             ZeroBounceSDK::emailFinderSFTPFile,
-            ZeroBounceSDK::domainSearchSFTPFile,
-            // An unset name is allowed here, but a blank one is not.
+            // LIVE: validateSFTPfile needs a file_name too, although the docs
+            // call it optional for that one job.
             ZeroBounceSDK::validateSFTPFile,
         )
         for (call in calls) {
@@ -1182,13 +1202,26 @@ class OfflineApiTest {
 
         await<com.google.gson.JsonElement> { ok, err ->
             ZeroBounceSDK.listInboxPlacementTests(
-                ZBListInboxPlacementTestsOptions(status = "finished", page = 1, pageSize = 25), ok, err,
+                ZBListInboxPlacementTestsOptions(
+                    status = "finished",
+                    page = 1,
+                    pageSize = 25,
+                    createdAfter = "2026-01-01",
+                    createdBefore = "2026-02-01",
+                ),
+                ok, err,
             )
         }
         request = onlyRequest()
+        assertEquals("/api/ipt/tests", request.path)
         assertEquals("finished", request.fields["status"])
         assertEquals("1", request.fields["page"])
-        assertEquals("25", request.fields["pageSize"])
+        assertEquals("2026-01-01", request.fields["createdAfter"])
+        assertEquals("2026-02-01", request.fields["createdBefore"])
+        // LIVE: the page size is page_size. Sent as pageSize it is ignored and
+        // the whole list comes back.
+        assertEquals("25", request.fields["page_size"])
+        assertFalse(request.fields.containsKey("pageSize"))
 
         await<com.google.gson.JsonElement> { ok, err ->
             ZeroBounceSDK.listInboxPlacementTests(null, ok, err)
@@ -1196,6 +1229,9 @@ class OfflineApiTest {
         request = onlyRequest()
         assertFalse(request.fields.containsKey("status"))
         assertFalse(request.fields.containsKey("page"))
+        assertFalse(request.fields.containsKey("page_size"))
+        assertFalse(request.fields.containsKey("createdAfter"))
+        assertFalse(request.fields.containsKey("createdBefore"))
 
         await<com.google.gson.JsonElement> { ok, err ->
             ZeroBounceSDK.deleteInboxPlacementTest("a b/c", ok, err)
@@ -1349,6 +1385,296 @@ class OfflineApiTest {
             rejected = true
         }
         assertTrue("an http:// base URL should be rejected", rejected)
+        resetSharedUrls()
+    }
+
+    @Test
+    fun s3ValidateAndScoreRequireFileNameAndReturnUrl() {
+        useSharedKey("s3-key")
+        val done = "https://example.com/done"
+
+        // LIVE: POST /validateS3file without a return_url answers 400
+        // "Provided return URL is not permitted: None", and scoreS3file had no
+        // way to send one at all, so it could never succeed.
+        val validateNoUrl = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.validateS3File(ZBValidateS3FileOptions(fileName = "inbox.csv"), ok, err)
+        }
+        assertTrue(validateNoUrl.errorText().orEmpty().contains("return_url"))
+
+        val scoreNoUrl = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.scoreS3File(ZBScoreS3FileOptions(fileName = "inbox.csv"), ok, err)
+        }
+        assertTrue(scoreNoUrl.errorText().orEmpty().contains("return_url"))
+
+        val validateBlankUrl = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.validateS3File(
+                ZBValidateS3FileOptions(fileName = "inbox.csv", returnUrl = "  "),
+                ok,
+                err,
+            )
+        }
+        assertTrue(validateBlankUrl.errorText().orEmpty().contains("return_url"))
+
+        val scoreNoName = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.scoreS3File(ZBScoreS3FileOptions(fileName = " ", returnUrl = done), ok, err)
+        }
+        assertTrue(scoreNoName.errorText().orEmpty().contains("file_name"))
+
+        assertEquals(0, fake.size())
+
+        // With both fields the call goes out, on the bulkapi root and as a form POST.
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.scoreS3File(
+                ZBScoreS3FileOptions(
+                    fileName = "inbox.csv",
+                    returnUrl = done,
+                    hasHeaderRow = true,
+                    emailAddressColumn = 0,
+                ),
+                ok,
+                err,
+            )
+        }
+        val scored = onlyRequest()
+        assertEquals("POST", scored.method)
+        assertEquals("bulkapi.zerobounce.net", scored.host)
+        assertEquals("/scoreS3file", scored.path)
+        assertEquals("inbox.csv", scored.fields["file_name"])
+        assertEquals(done, scored.fields["return_url"])
+        assertEquals("true", scored.fields["has_header_row"])
+        assertEquals("0", scored.fields["email_address_column"])
+        assertEquals("s3-key", scored.fields["api_key"])
+        assertNull(scored.authorization)
+    }
+
+    @Test
+    fun s3JobsSurfaceAFailedBody() {
+        useSharedKey("success-false-s3")
+        val done = "https://example.com/done"
+
+        // LIVE: a rejected job answers HTTP 200 with success: false.
+        val validated = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.validateS3File(
+                ZBValidateS3FileOptions(fileName = "inbox.csv", returnUrl = done),
+                ok,
+                err,
+            )
+        }
+        assertNull(validated.value)
+        assertTrue(validated.errorText().orEmpty().contains("File cannot be found."))
+        assertEquals(200, validated.error?.statusCode)
+
+        val scored = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.scoreS3File(
+                ZBScoreS3FileOptions(fileName = "inbox.csv", returnUrl = done),
+                ok,
+                err,
+            )
+        }
+        assertNull(scored.value)
+        assertTrue(scored.errorText().orEmpty().contains("File cannot be found."))
+    }
+
+    @Test
+    fun emailFinderNeedsAFirstNameOrFullNameColumn() {
+        useSharedKey("finder-key")
+
+        // The docs require first_name_column or full_name_column next to
+        // domain_column: without a name there is nothing to build an address from.
+        val noOptions = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendEmailFinderFile(csvFile, 1, null, ok, err)
+        }
+        assertTrue(noOptions.errorText().orEmpty().contains("first_name_column or full_name_column"))
+
+        val onlyLastName = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendEmailFinderFile(
+                csvFile,
+                1,
+                ZBEmailFinderSendFileOptions(lastNameColumn = 2),
+                ok,
+                err,
+            )
+        }
+        assertTrue(onlyLastName.errorText().orEmpty().contains("first_name_column or full_name_column"))
+
+        val stream = await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendEmailFinderFileStream(
+                ByteArrayInputStream("example.com\n".toByteArray()),
+                "finder.csv",
+                1,
+                ZBEmailFinderSendFileOptions(hasHeaderRow = true),
+                ok,
+                err,
+            )
+        }
+        assertTrue(stream.errorText().orEmpty().contains("first_name_column or full_name_column"))
+        assertEquals(0, fake.size())
+
+        // A full name column on its own is enough.
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendEmailFinderFileStream(
+                ByteArrayInputStream("example.com,Ada Lovelace\n".toByteArray()),
+                "finder.csv",
+                1,
+                ZBEmailFinderSendFileOptions(fullNameColumn = 2),
+                ok,
+                err,
+            )
+        }
+        val request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("bulkapi.zerobounce.net", request.host)
+        assertEquals("/email-finder/sendfile", request.path)
+        assertEquals("2", request.fields["full_name_column"])
+        assertEquals("finder-key", request.fields["api_key"])
+    }
+
+    @Test
+    fun createInboxPlacementTestChecksTheDocumentedLimits() {
+        useSharedKey("ipt-limits")
+
+        val longName = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest("n".repeat(65), null, ok, err)
+        }
+        assertTrue(longName.errorText().orEmpty().contains("name"))
+        assertTrue(longName.errorText().orEmpty().contains("64"))
+
+        val badType = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(
+                "Launch",
+                ZBCreateInboxPlacementTestOptions(testType = 4, senderEmail = "news@example.com"),
+                ok, err,
+            )
+        }
+        assertTrue(badType.errorText().orEmpty().contains("test_type"))
+
+        // Type 1 mails the seeds from your own address, so it has to be given.
+        val noSender = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(
+                "Launch",
+                ZBCreateInboxPlacementTestOptions(testType = 1),
+                ok, err,
+            )
+        }
+        assertTrue(noSender.errorText().orEmpty().contains("sender_email"))
+
+        val blankSender = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(
+                "Launch",
+                ZBCreateInboxPlacementTestOptions(testType = 1, senderEmail = " "),
+                ok, err,
+            )
+        }
+        assertTrue(blankSender.errorText().orEmpty().contains("sender_email"))
+        assertEquals(0, fake.size())
+
+        // A name of exactly 64 characters is allowed, and type 2 needs no sender.
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest(
+                "n".repeat(64),
+                ZBCreateInboxPlacementTestOptions(testType = 2),
+                ok, err,
+            )
+        }
+        val request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("bulkapi.zerobounce.net", request.host)
+        assertEquals("/api/ipt/test", request.path)
+        assertEquals("Bearer ipt-limits", request.authorization)
+        assertEquals("n".repeat(64), request.fields["name"])
+        assertEquals("2", request.fields["testType"])
+        assertFalse(request.fields.containsKey("senderEmail"))
+    }
+
+    @Test
+    fun listInboxPlacementTestsBoundsThePageSize() {
+        useSharedKey("ipt-page")
+
+        for (size in listOf(0, 101)) {
+            val outcome = await<com.google.gson.JsonElement> { ok, err ->
+                ZeroBounceSDK.listInboxPlacementTests(
+                    ZBListInboxPlacementTestsOptions(pageSize = size), ok, err,
+                )
+            }
+            assertTrue(outcome.errorText().orEmpty().contains("page_size"))
+        }
+        assertEquals(0, fake.size())
+
+        for (size in listOf(1, 100)) {
+            await<com.google.gson.JsonElement> { ok, err ->
+                ZeroBounceSDK.listInboxPlacementTests(
+                    ZBListInboxPlacementTestsOptions(pageSize = size), ok, err,
+                )
+            }
+            assertEquals(size.toString(), onlyRequest().fields["page_size"])
+        }
+    }
+
+    @Test
+    fun inboxPlacementListAndCreateSurfaceTheDetailError() {
+        useSharedKey("ipt-detail")
+
+        val listed = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.listInboxPlacementTests(ZBListInboxPlacementTestsOptions(pageSize = 10), ok, err)
+        }
+        assertNull(listed.value)
+        assertTrue(listed.errorText().orEmpty().contains("Inbox placement test not found."))
+        expectShort(listed.errorText()!!)
+
+        val created = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.createInboxPlacementTest("Launch", null, ok, err)
+        }
+        assertNull(created.value)
+        assertTrue(created.errorText().orEmpty().contains("Inbox placement test not found."))
+    }
+
+    @Test
+    fun theWholeListEvaluatorFlowFollowsItsBaseUrl() {
+        // Overriding the List Evaluator host used to move only the result
+        // fetch: the upload and send-evaluated-file were built from the bulk
+        // base and kept going to the live API.
+        useSharedKey("eval-key")
+        ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulk.example.test/v2/listevaluator")
+
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendListEvaluatorFile(csvFile, 1, ok, err)
+        }
+        var request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("bulk.example.test", request.host)
+        assertEquals("/v2/listevaluator/", request.path)
+        assertEquals("1", request.fields["email_address_column"])
+
+        await<ZBSendFileResponse> { ok, err ->
+            ZeroBounceSDK.sendListEvaluatorFileStream(
+                ByteArrayInputStream("a@example.com\n".toByteArray()),
+                "list.csv",
+                1,
+                ok,
+                err,
+            )
+        }
+        request = onlyRequest()
+        assertEquals("bulk.example.test", request.host)
+        assertEquals("/v2/listevaluator/", request.path)
+
+        await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getListEvaluatorResult("fid", ok, err)
+        }
+        request = onlyRequest()
+        assertEquals("bulk.example.test", request.host)
+        assertEquals("/v2/listevaluator/fid/", request.path)
+
+        // send-evaluated-file is the third leg of the same flow and sits one
+        // path segment above the base.
+        await<ZBSendFileResponse> { ok, err -> ZeroBounceSDK.sendEvaluatedFile("eval-1", ok, err) }
+        request = onlyRequest()
+        assertEquals("POST", request.method)
+        assertEquals("bulk.example.test", request.host)
+        assertEquals("/v2/send-evaluated-file/", request.path)
+        assertEquals("eval-1", request.fields["file_id"])
+        assertEquals("eval-key", request.fields["api_key"])
+
         resetSharedUrls()
     }
 

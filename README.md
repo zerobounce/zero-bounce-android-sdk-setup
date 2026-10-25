@@ -473,6 +473,24 @@ val s3 = ZBBulkFileJobOptions(
 ZeroBounceSDK.emailFinderS3File(s3, ok, error)
 ZeroBounceSDK.domainSearchS3File(s3.copy(removeDuplicates = true), ok, error)
 
+// Validation and scoring take their own options, with the same two required
+// fields plus the columns only those jobs understand. Without a returnUrl the
+// API answers 400 "Provided return URL is not permitted: None".
+ZeroBounceSDK.validateS3File(
+    ZBValidateS3FileOptions(
+        fileName = "lists/leads.csv",
+        returnUrl = "https://example.com/zerobounce-done",
+        hasHeaderRow = true,
+        emailAddressColumn = 1,
+    ),
+    ok, error)
+ZeroBounceSDK.scoreS3File(
+    ZBScoreS3FileOptions(
+        fileName = "lists/leads.csv",
+        returnUrl = "https://example.com/zerobounce-done",
+    ),
+    ok, error)
+
 // SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
 // The docs list fileName as optional for validateSFTPFile, but the live API
 // requires it there too.
@@ -496,6 +514,10 @@ ZeroBounceSDK.exportSFTPFile("<FILE_ID>", "/exports", ok, error)
 Runs on its own host, authenticates with an `Authorization: Bearer` header, and
 sends camelCase JSON bodies. It spends the account's inbox-test credits.
 
+The documented limits are checked before a request is sent: the name is at most
+64 characters, `testType` is 1, 2 or 3, type 1 also needs a `senderEmail`, and
+the listing's `pageSize` is 1 to 100.
+
 ```kotlin
 ZeroBounceSDK.getInboxPlacementProviders(ok, error)
 ZeroBounceSDK.getInboxPlacementTestTypes(ok, error)
@@ -513,7 +535,14 @@ ZeroBounceSDK.createInboxPlacementTest(
 ZeroBounceSDK.getInboxPlacementTest("<TEST_ID>", ok, error)
 
 ZeroBounceSDK.listInboxPlacementTests(
-    ZBListInboxPlacementTestsOptions(status = "finished", page = 1), ok, error)
+    ZBListInboxPlacementTestsOptions(
+        status = "finished",        // or "running"
+        page = 1,
+        pageSize = 25,              // 1-100; sent as page_size
+        createdAfter = "2026-01-01",
+        createdBefore = "2026-02-01",
+    ),
+    ok, error)
 ZeroBounceSDK.setInboxPlacementWebhook("https://example.com/ipt-webhook", ok, error)
 ZeroBounceSDK.getInboxPlacementWebhook(ok, error)
 ZeroBounceSDK.deleteInboxPlacementTest("<TEST_ID>", ok, error)
@@ -522,7 +551,8 @@ ZeroBounceSDK.deleteInboxPlacementTest("<TEST_ID>", ok, error)
 ## Per-API base URLs
 
 The list evaluator and the Inbox Placement Tester are separate hosts, so
-`initialize` alone leaves them pointing at the live API.
+`initialize` alone leaves them pointing at the live API. The list evaluator base
+URL moves the whole flow: the upload, the result and `sendEvaluatedFile`.
 
 ```kotlin
 ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulkapi.zerobounce.net/v2/listevaluator")

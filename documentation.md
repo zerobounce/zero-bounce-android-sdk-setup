@@ -449,24 +449,45 @@ These live on the bulkapi host *without* the `/v2` path.
 
 ```kotlin
 // Amazon S3. fileName is the full path, as returned by listS3Files.
-ZeroBounceSDK.emailFinderS3File(
-    ZBBulkFileJobOptions(fileName = "lists/leads.csv", hasHeaderRow = true), ok, error)
+// fileName and returnUrl are required on every one of these jobs.
+val s3 = ZBBulkFileJobOptions(
+    fileName = "lists/leads.csv",
+    hasHeaderRow = true,
+    returnUrl = "https://example.com/zerobounce-done",
+)
+ZeroBounceSDK.emailFinderS3File(s3, ok, error)
+ZeroBounceSDK.domainSearchS3File(s3.copy(removeDuplicates = true), ok, error)
 
-ZeroBounceSDK.domainSearchS3File(
-    ZBBulkFileJobOptions(
+// Validation and scoring take their own options, with the same two required
+// fields plus the columns only those jobs understand. Without a returnUrl the
+// API answers 400 "Provided return URL is not permitted: None".
+ZeroBounceSDK.validateS3File(
+    ZBValidateS3FileOptions(
         fileName = "lists/leads.csv",
-        removeDuplicates = true,
+        returnUrl = "https://example.com/zerobounce-done",
+        hasHeaderRow = true,
+        emailAddressColumn = 1,
+    ),
+    ok, error)
+ZeroBounceSDK.scoreS3File(
+    ZBScoreS3FileOptions(
+        fileName = "lists/leads.csv",
         returnUrl = "https://example.com/zerobounce-done",
     ),
     ok, error)
 
 // SFTP/FTP. The server, path and protocol come from your ZeroBounce settings.
-// fileName may be left null for validateSFTPFile alone, which then uses the
-// input bucket from those settings.
-ZeroBounceSDK.validateSFTPFile(ZBBulkFileJobOptions(hasHeaderRow = true), ok, error)
-ZeroBounceSDK.scoreSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
-ZeroBounceSDK.emailFinderSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
-ZeroBounceSDK.domainSearchSFTPFile(ZBBulkFileJobOptions(fileName = "my_file.txt"), ok, error)
+// The docs list fileName as optional for validateSFTPFile, but the live API
+// requires it there too.
+val sftp = ZBBulkFileJobOptions(
+    fileName = "my_file.txt",
+    hasHeaderRow = true,
+    returnUrl = "https://example.com/zerobounce-done",
+)
+ZeroBounceSDK.validateSFTPFile(sftp, ok, error)
+ZeroBounceSDK.scoreSFTPFile(sftp, ok, error)
+ZeroBounceSDK.emailFinderSFTPFile(sftp, ok, error)
+ZeroBounceSDK.domainSearchSFTPFile(sftp, ok, error)
 
 // Note the field: this one takes export_path, not export_bucket.
 // null uses the export path from your settings.
@@ -475,8 +496,12 @@ ZeroBounceSDK.exportSFTPFile("<FILE_ID>", "/exports", ok, error)
 
 ## Inbox Placement Tester
 
-Runs on its own host, takes the API key on the query string, and sends camelCase
-JSON bodies. It spends the account's inbox-test credits.
+Runs on its own host, authenticates with an `Authorization: Bearer` header, and
+sends camelCase JSON bodies. It spends the account's inbox-test credits.
+
+The documented limits are checked before a request is sent: the name is at most
+64 characters, `testType` is 1, 2 or 3, type 1 also needs a `senderEmail`, and
+the listing's `pageSize` is 1 to 100.
 
 ```kotlin
 ZeroBounceSDK.getInboxPlacementProviders(ok, error)
@@ -495,7 +520,14 @@ ZeroBounceSDK.createInboxPlacementTest(
 ZeroBounceSDK.getInboxPlacementTest("<TEST_ID>", ok, error)
 
 ZeroBounceSDK.listInboxPlacementTests(
-    ZBListInboxPlacementTestsOptions(status = "finished", page = 1), ok, error)
+    ZBListInboxPlacementTestsOptions(
+        status = "finished",        // or "running"
+        page = 1,
+        pageSize = 25,              // 1-100; sent as page_size
+        createdAfter = "2026-01-01",
+        createdBefore = "2026-02-01",
+    ),
+    ok, error)
 ZeroBounceSDK.setInboxPlacementWebhook("https://example.com/ipt-webhook", ok, error)
 ZeroBounceSDK.getInboxPlacementWebhook(ok, error)
 ZeroBounceSDK.deleteInboxPlacementTest("<TEST_ID>", ok, error)
@@ -504,7 +536,8 @@ ZeroBounceSDK.deleteInboxPlacementTest("<TEST_ID>", ok, error)
 ## Per-API base URLs
 
 The list evaluator and the Inbox Placement Tester are separate hosts, so
-`initialize` alone leaves them pointing at the live API.
+`initialize` alone leaves them pointing at the live API. The list evaluator base
+URL moves the whole flow: the upload, the result and `sendEvaluatedFile`.
 
 ```kotlin
 ZeroBounceSDK.setListEvaluatorBaseUrl("https://bulkapi.zerobounce.net/v2/listevaluator")

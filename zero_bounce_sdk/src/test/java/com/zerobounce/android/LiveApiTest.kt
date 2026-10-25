@@ -277,7 +277,8 @@ class LiveApiTest {
 
         check("LIVE: inbox placement tests are listed from /tests") {
             // The listing is GET /tests (plural); /test is the single-test path
-            // and answers Method "GET" not allowed.
+            // and answers Method "GET" not allowed. The page size has to go as
+            // page_size: pageSize is accepted and then ignored.
             ran(await<JsonElement> { ok, err ->
                 ZeroBounceSDK.listInboxPlacementTests(
                     ZBListInboxPlacementTestsOptions(page = 1, pageSize = 10), ok, err,
