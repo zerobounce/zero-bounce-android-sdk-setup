@@ -24,6 +24,7 @@ internal class Priority3Api {
             errorCallback(ErrorResponse.parseError("Empty parameter: domain_column"))
             return
         }
+        if (missingEmailFinderNameColumn(options, errorCallback)) return
         val url = "${ZeroBounceSDK.priority3EmailFinderBaseUrl()}/sendfile"
         sendBulkRootMultipart(url, file, buildEmailFinderFields(domainColumn, options), responseCallback, errorCallback)
     }
@@ -40,6 +41,7 @@ internal class Priority3Api {
             errorCallback(ErrorResponse.parseError("Empty parameter: domain_column"))
             return
         }
+        if (missingEmailFinderNameColumn(options, errorCallback)) return
         val url = "${ZeroBounceSDK.priority3EmailFinderBaseUrl()}/sendfile"
         sendBulkRootMultipartStream(
             url,
@@ -49,6 +51,22 @@ internal class Priority3Api {
             responseCallback,
             errorCallback,
         )
+    }
+
+    /**
+     * The bulk email finder needs a name to work from: the docs require
+     * first_name_column or full_name_column alongside domain_column. A file
+     * sent without either is accepted and then comes back with no results.
+     */
+    private fun missingEmailFinderNameColumn(
+        options: ZBEmailFinderSendFileOptions?,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): Boolean {
+        if (options != null && (options.firstNameColumn > 0 || options.fullNameColumn > 0)) {
+            return false
+        }
+        errorCallback(ErrorResponse.parseError("Empty parameter: first_name_column or full_name_column"))
+        return true
     }
 
     private fun buildEmailFinderFields(
@@ -185,7 +203,8 @@ internal class Priority3Api {
         }
         val fields = mapOf("email_address_column" to emailAddressColumn.toString())
         sendBulkRootMultipart(
-            "${ZeroBounceSDK.priority3BulkApiBaseUrl()}/listevaluator/",
+            // The upload has to follow the same base URL as the result fetch.
+            "${ZeroBounceSDK.priority3ListEvaluatorBaseUrl()}/",
             file,
             fields,
             responseCallback,
@@ -206,7 +225,8 @@ internal class Priority3Api {
         }
         val fields = mapOf("email_address_column" to emailAddressColumn.toString())
         sendBulkRootMultipartStream(
-            "${ZeroBounceSDK.priority3BulkApiBaseUrl()}/listevaluator/",
+            // The upload has to follow the same base URL as the result fetch.
+            "${ZeroBounceSDK.priority3ListEvaluatorBaseUrl()}/",
             inputStream,
             fileName,
             fields,
@@ -253,7 +273,7 @@ internal class Priority3Api {
             return
         }
         postBulkRootFormAt(
-            "${ZeroBounceSDK.priority3BulkApiBaseUrl()}/send-evaluated-file/",
+            ZeroBounceSDK.priority3SendEvaluatedFileUrl(),
             mapOf("file_id" to fileId.trim()),
             responseCallback,
             errorCallback,
@@ -337,30 +357,27 @@ internal class Priority3Api {
         options: ZBValidateS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) {
-        if (options.fileName.isBlank()) {
-            errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
-            return
-        }
-        postBulkRootForm("/validateS3file", buildValidateS3Fields(options), responseCallback, errorCallback)
-    }
+    ) = bulkRootFileJob(
+        "/validateS3file",
+        options.fileName,
+        options.returnUrl,
+        buildValidateS3Fields(options),
+        responseCallback,
+        errorCallback,
+    )
 
     fun scoreS3File(
         options: ZBScoreS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-    ) {
-        if (options.fileName.isBlank()) {
-            errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
-            return
-        }
-        val fields = mutableMapOf("file_name" to options.fileName)
-        putOptionalBool(fields, "has_header_row", options.hasHeaderRow)
-        putOptionalBool(fields, "remove_duplicates", options.removeDuplicates)
-        putOptionalBool(fields, "remove_duplicate", options.removeDuplicate)
-        options.emailAddressColumn?.let { fields["email_address_column"] = it.toString() }
-        postBulkRootForm("/scoreS3file", fields, responseCallback, errorCallback)
-    }
+    ) = bulkRootFileJob(
+        "/scoreS3file",
+        options.fileName,
+        options.returnUrl,
+        buildScoreS3Fields(options),
+        responseCallback,
+        errorCallback,
+    )
 
     fun exportS3File(
         fileId: String,
@@ -447,48 +464,69 @@ internal class Priority3Api {
     }
 
     /**
-     * POSTs one of the six documented S3 / SFTP file jobs on the bulkapi root.
+     * POSTs one of the eight documented S3 / SFTP file jobs on the bulkapi root.
      *
      * Booleans go on the wire as the strings "true"/"false", and an option the
      * caller left unset is not sent at all.
-     */
-    /**
-     * POSTs one of the six documented S3 / SFTP file jobs on the bulkapi root.
      *
      * LIVE: file_name and return_url are required on every one of them,
-     * validateSFTPfile included, although the docs list file_name as optional
-     * for that one. Without either the API answers "This field is required".
+     * validateS3file, scoreS3file and validateSFTPfile included, although the
+     * docs list them as optional. Without a return_url the API answers 400
+     * "Provided return URL is not permitted: None"; without a file_name it
+     * answers "This field is required". Both are checked here, once, so that
+     * every job rejects the same call with the same message.
      */
+    private fun bulkRootFileJob(
+        path: String,
+        fileName: String?,
+        returnUrl: String?,
+        extraFields: Map<String, String>,
+        responseCallback: (response: ZBSendFileResponse?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) {
+        if (fileName.isNullOrBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
+            return
+        }
+        if (returnUrl.isNullOrBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: return_url"))
+            return
+        }
+        val fields = mutableMapOf(
+            "file_name" to fileName,
+            "return_url" to returnUrl,
+        )
+        fields.putAll(extraFields)
+        postBulkRootForm(path, fields, responseCallback, errorCallback)
+    }
+
+    /** The four jobs that take nothing beyond the shared [ZBBulkFileJobOptions]. */
     private fun bulkRootFileJob(
         path: String,
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
-        if (options.fileName.isNullOrBlank()) {
-            errorCallback(ErrorResponse.parseError("Empty parameter: file_name"))
-            return
-        }
-        if (options.returnUrl.isNullOrBlank()) {
-            errorCallback(ErrorResponse.parseError("Empty parameter: return_url"))
-            return
-        }
-        val fields = mutableMapOf(
-            "has_header_row" to options.hasHeaderRow.toString(),
-            "file_name" to options.fileName,
-            "return_url" to options.returnUrl,
-        )
+        val fields = mutableMapOf("has_header_row" to options.hasHeaderRow.toString())
         options.removeDuplicates?.let { fields["remove_duplicates"] = it.toString() }
-        postBulkRootForm(path, fields, responseCallback, errorCallback)
+        bulkRootFileJob(path, options.fileName, options.returnUrl, fields, responseCallback, errorCallback)
     }
 
-    private fun buildValidateS3Fields(options: ZBValidateS3FileOptions): Map<String, String> {
-        val fields = mutableMapOf("file_name" to options.fileName)
+    private fun buildScoreS3Fields(options: ZBScoreS3FileOptions): Map<String, String> {
+        val fields = mutableMapOf<String, String>()
         putOptionalBool(fields, "has_header_row", options.hasHeaderRow)
         putOptionalBool(fields, "remove_duplicates", options.removeDuplicates)
         putOptionalBool(fields, "remove_duplicate", options.removeDuplicate)
         options.emailAddressColumn?.let { fields["email_address_column"] = it.toString() }
-        options.returnUrl?.let { fields["return_url"] = it }
+        return fields
+    }
+
+    private fun buildValidateS3Fields(options: ZBValidateS3FileOptions): Map<String, String> {
+        val fields = mutableMapOf<String, String>()
+        putOptionalBool(fields, "has_header_row", options.hasHeaderRow)
+        putOptionalBool(fields, "remove_duplicates", options.removeDuplicates)
+        putOptionalBool(fields, "remove_duplicate", options.removeDuplicate)
+        options.emailAddressColumn?.let { fields["email_address_column"] = it.toString() }
         if (options.firstNameColumn > 0) {
             fields["first_name_column"] = options.firstNameColumn.toString()
         }

@@ -101,6 +101,12 @@ object ZeroBounceSDK {
     private val STORAGE_PERMISSIONS = arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
     private var logEnabled = false
 
+    // The documented limits of the Inbox Placement Tester.
+    private const val MAX_INBOX_PLACEMENT_NAME = 64
+    private val INBOX_PLACEMENT_TEST_TYPES = setOf(1, 2, 3)
+    private const val MIN_IPT_PAGE_SIZE = 1
+    private const val MAX_IPT_PAGE_SIZE = 100
+
     private val gson = GsonBuilder()
         .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
         .registerTypeAdapter(Date::class.java, GsonDateDeserializer())
@@ -1380,6 +1386,12 @@ object ZeroBounceSDK {
         priority3Api.listS3Files(bucket, search, responseCallback, errorCallback)
     }
 
+    /**
+     * Validates a file in your Amazon S3 bucket.
+     *
+     * LIVE: [ZBValidateS3FileOptions.returnUrl] is required. Without it the
+     * API answers 400 "Provided return URL is not permitted: None".
+     */
     fun validateS3File(
         options: ZBValidateS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
@@ -1389,6 +1401,12 @@ object ZeroBounceSDK {
         priority3Api.validateS3File(options, responseCallback, errorCallback)
     }
 
+    /**
+     * Scores a file in your Amazon S3 bucket.
+     *
+     * LIVE: [ZBScoreS3FileOptions.returnUrl] is required, as it is on every
+     * other S3 and SFTP job.
+     */
     fun scoreS3File(
         options: ZBScoreS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
@@ -1437,9 +1455,9 @@ object ZeroBounceSDK {
     /**
      * Validates a file from your SFTP/FTP server.
      *
-     * This is the one job whose file_name the docs list as optional: leave
-     * [ZBBulkFileJobOptions.fileName] null to use the input bucket from your
-     * ZeroBounce settings.
+     * LIVE: the docs list this job's file_name as optional, but the API
+     * rejects the call without it, so [ZBBulkFileJobOptions.fileName] is
+     * required here too, as is [ZBBulkFileJobOptions.returnUrl].
      */
     fun validateSFTPFile(
         options: ZBBulkFileJobOptions,
@@ -1497,9 +1515,10 @@ object ZeroBounceSDK {
         priority3Api.exportSFTPFile(fileId, exportPath, responseCallback, errorCallback)
     }
 
-    // Inbox Placement Tester (bulkapi.zerobounce.net/api/ipt). The API key goes
-    // on the query string, bodies are camelCase JSON, and errors come back
-    // under a "detail" key. Spends the account's inbox-test credits.
+    // Inbox Placement Tester (bulkapi.zerobounce.net/api/ipt). LIVE: the API
+    // key goes in an Authorization: Bearer header, never on the query string.
+    // Bodies are camelCase JSON and errors come back under a "detail" key.
+    // Spends the account's inbox-test credits.
 
     /** Seed providers available for new tests. */
     fun getInboxPlacementProviders(
@@ -1519,7 +1538,14 @@ object ZeroBounceSDK {
         priority3Api.inboxPlacementRequest("GET", "/test-types", emptyMap(), null, responseCallback, errorCallback)
     }
 
-    /** Starts a test and returns its seed list. */
+    /**
+     * Starts a test and returns its seed list.
+     *
+     * The documented limits are checked before the request: [name] is at most
+     * 64 characters, [ZBCreateInboxPlacementTestOptions.testType] is 1, 2 or
+     * 3, and type 1 needs a senderEmail. The API spends inbox-test credits on
+     * a test it accepts, so a call it would only reject is not worth sending.
+     */
     fun createInboxPlacementTest(
         name: String,
         options: ZBCreateInboxPlacementTestOptions?,
@@ -1529,6 +1555,24 @@ object ZeroBounceSDK {
         if (invalidApiKey(errorCallback)) return
         if (name.isBlank()) {
             errorCallback(ErrorResponse.parseError("Empty parameter: name"))
+            return
+        }
+        if (name.length > MAX_INBOX_PLACEMENT_NAME) {
+            errorCallback(
+                ErrorResponse.parseError(
+                    "Invalid parameter: name (must be at most $MAX_INBOX_PLACEMENT_NAME characters)",
+                ),
+            )
+            return
+        }
+        val testType = options?.testType
+        if (testType != null && testType !in INBOX_PLACEMENT_TEST_TYPES) {
+            errorCallback(ErrorResponse.parseError("Invalid parameter: test_type (must be 1, 2 or 3)"))
+            return
+        }
+        // Type 1 mails the seeds from your own address, so it has to be given.
+        if (testType == 1 && options?.senderEmail.isNullOrBlank()) {
+            errorCallback(ErrorResponse.parseError("Empty parameter: sender_email"))
             return
         }
         val body = mutableMapOf<String, Any?>("name" to name)
@@ -1552,17 +1596,34 @@ object ZeroBounceSDK {
         priority3Api.inboxPlacementRequest("GET", "/test/$segment", emptyMap(), null, responseCallback, errorCallback)
     }
 
-    /** The account's tests. */
+    /**
+     * The account's tests, newest first.
+     *
+     * [ZBListInboxPlacementTestsOptions.pageSize] must be 1 to 100.
+     */
     fun listInboxPlacementTests(
         options: ZBListInboxPlacementTestsOptions?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        val pageSize = options?.pageSize
+        if (pageSize != null && pageSize !in MIN_IPT_PAGE_SIZE..MAX_IPT_PAGE_SIZE) {
+            errorCallback(
+                ErrorResponse.parseError(
+                    "Invalid parameter: page_size (must be between $MIN_IPT_PAGE_SIZE and $MAX_IPT_PAGE_SIZE)",
+                ),
+            )
+            return
+        }
         val query = mutableMapOf<String, String>()
         options?.status?.let { query["status"] = it }
+        options?.createdAfter?.let { query["createdAfter"] = it }
+        options?.createdBefore?.let { query["createdBefore"] = it }
         options?.page?.let { query["page"] = it.toString() }
-        options?.pageSize?.let { query["pageSize"] = it.toString() }
+        // LIVE: the page size is page_size. Sent as the documented pageSize it
+        // is silently ignored and the whole list comes back unpaginated.
+        pageSize?.let { query["page_size"] = it.toString() }
         // LIVE: the listing is GET /tests (plural). /test is the single-test
         // path and answers Method "GET" not allowed.
         priority3Api.inboxPlacementRequest("GET", "/tests", query, null, responseCallback, errorCallback)
@@ -1820,11 +1881,25 @@ object ZeroBounceSDK {
 
     internal fun priority3ListEvaluatorBaseUrl(): String = listEvaluatorBaseUrl
 
+    /**
+     * send-evaluated-file is the third leg of the List Evaluator flow and sits
+     * one path segment above [listEvaluatorBaseUrl], so it is resolved against
+     * that base. Built from [bulkApiBaseUrl] instead it would go to a different
+     * host than the upload and the result whenever the List Evaluator base is
+     * overridden.
+     */
+    internal fun priority3SendEvaluatedFileUrl(): String {
+        val resolved = listEvaluatorBaseUrl.trimEnd('/').toHttpUrlOrNull()
+            ?.resolve("send-evaluated-file/")
+        return resolved?.toString() ?: "$bulkApiBaseUrl/send-evaluated-file/"
+    }
+
     internal fun priority3InboxPlacementBaseUrl(): String = inboxPlacementBaseUrl
 
     /**
      * Overrides the list evaluator base URL. It is a separate host rather than
      * a path built from the bulk base, so [initialize] alone does not change it.
+     * It moves the whole flow: the upload, the result and send-evaluated-file.
      */
     fun setListEvaluatorBaseUrl(url: String) {
         require(isAllowedApiBaseUrl(url)) { "listEvaluatorBaseUrl must be an https:// URL" }

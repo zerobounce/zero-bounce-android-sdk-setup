@@ -2088,7 +2088,8 @@ class ZeroBounceSDKTest {
         ZeroBounceSDK.sendEmailFinderFile(
             csvFile,
             1,
-            null,
+            // The API needs a first or full name column next to the domain one.
+            ZBEmailFinderSendFileOptions(firstNameColumn = 2),
             { rsp ->
                 actualResponse = rsp
                 countDownLatch.countDown()
@@ -2120,7 +2121,11 @@ class ZeroBounceSDKTest {
 
         var actualResponse: Any? = null
         ZeroBounceSDK.validateS3File(
-            ZBValidateS3FileOptions(fileName = "bucket/key.csv"),
+            // LIVE: return_url is required; without it the API answers 400.
+            ZBValidateS3FileOptions(
+                fileName = "bucket/key.csv",
+                returnUrl = "https://example.com/done",
+            ),
             { rsp ->
                 actualResponse = rsp
                 countDownLatch.countDown()
