@@ -8,7 +8,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 
 internal class Priority3Api {
@@ -660,13 +659,6 @@ internal class Priority3Api {
             } catch (_: Exception) {
                 false
             }
-        }
-
-        internal fun writeDownloadFile(downloadPath: String, bytes: ByteArray): ZBGetFileResponse {
-            val out = File(downloadPath)
-            out.parentFile?.mkdirs()
-            FileOutputStream(out).use { it.write(bytes) }
-            return ZBGetFileResponse(out.path)
         }
     }
 }

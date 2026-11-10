@@ -21,9 +21,11 @@ data class ErrorResponse(
     var errors: ArrayList<String> = arrayListOf(),
 
     /**
-     * The HTTP status of the failed response, or 0 when the failure never
-     * reached the API. It lets callers tell a 403 from Cloudflare apart from a
-     * 400/404 from the API and a 429 from the Warmup rate limit.
+     * The HTTP status of the response that failed, including a 200 whose body
+     * is an error. It is 0 only when there was no HTTP response: the SDK
+     * rejected the call before sending it, the connection failed, or saving a
+     * downloaded file failed. It lets callers tell a 403 from Cloudflare apart
+     * from a 400/404 from the API and a 429 from the Warmup rate limit.
      */
     var statusCode: Int = 0,
 ) {

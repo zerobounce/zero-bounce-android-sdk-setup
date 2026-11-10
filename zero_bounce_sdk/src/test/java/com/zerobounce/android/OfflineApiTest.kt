@@ -1303,6 +1303,71 @@ class OfflineApiTest {
     }
 
     @Test
+    fun aDeadKeyIsAnErrorOnEveryCall() {
+        useSharedKey("dead-key-user")
+        val drained = "Invalid API key or your account ran out of credits"
+        fun expect(name: String, outcome: Outcome<*>, message: String) {
+            assertEquals("$name returned a result", null, outcome.value)
+            assertEquals(name, message, outcome.errorText())
+            assertEquals("$name status", 200, outcome.error?.statusCode)
+        }
+        expect("validate", await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate("a@example.com", null, ok, err)
+        }, drained)
+        expect("activity", await<ZBActivityDataResponse> { ok, err ->
+            ZeroBounceSDK.getActivityData("a@example.com", ok, err)
+        }, drained)
+        expect("api usage", await<ZBGetApiUsageResponse> { ok, err ->
+            ZeroBounceSDK.getApiUsage(java.util.Date(0), java.util.Date(86_400_000), ok, err)
+        }, "Invalid API key")
+        expect("findEmail", await<ZBFindEmailResponse> { ok, err ->
+            ZeroBounceSDK.findEmail("john", domain = "example.com", responseCallback = ok, errorCallback = err)
+        }, drained)
+        expect("findDomain", await<ZBFindDomainResponse> { ok, err ->
+            ZeroBounceSDK.findDomain(domain = "example.com", responseCallback = ok, errorCallback = err)
+        }, drained)
+        expect("guessFormat", await<ZBEmailFinderResponse> { ok, err ->
+            ZeroBounceSDK.guessFormat("example.com", "john", responseCallback = ok, errorCallback = err)
+        }, drained)
+        expect("addFilter", await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.addFilter("allow", "email", "x@example.com", ok, err)
+        }, drained)
+        expect("deleteFilter", await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.deleteFilter("allow", "email", "x@example.com", ok, err)
+        }, drained)
+        expect("listFilters GET", await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.listFilters(false, ok, err)
+        }, drained)
+        expect("listFilters POST", await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.listFilters(true, ok, err)
+        }, drained)
+        // -1 is the documented credit balance of an invalid key, not an error.
+        val credits = await<ZBCreditsResponse> { ok, err -> ZeroBounceSDK.getCredits(ok, err) }
+        assertEquals(null, credits.error)
+        assertEquals("-1", credits.value?.credits.toString())
+    }
+
+    @Test
+    fun aBareMessageIsStillAResultWhereTheApiMeansOne() {
+        useSharedKey("greylist-pending-user")
+        val pending = await<ZBValidateResponse> { ok, err ->
+            ZeroBounceSDK.validate("a@example.com", null, ok, err)
+        }
+        assertEquals(null, pending.errorText())
+        assertEquals(
+            "Greylist validation still in progress. Please try again later.",
+            pending.value?.message,
+        )
+
+        useSharedKey("filter-message-user")
+        val added = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.addFilter("allow", "email", "x@example.com", ok, err)
+        }
+        assertEquals(null, added.errorText())
+        assertEquals("Filter has been added.", added.value?.asJsonObject?.get("Message")?.asString)
+    }
+
+    @Test
     fun validateBatchSendsTimeoutAsAString() {
         useSharedKey("batch-key")
 
@@ -1678,6 +1743,236 @@ class OfflineApiTest {
         resetSharedUrls()
     }
 
+    @Test
+    fun dateDeserializerUsesOnlyPatternLettersFromApi1() {
+        // SimpleDateFormat's own table (Android SDK sources, java/text/
+        // SimpleDateFormat.java) marks X, Y and u as API 24+ and L as TBD. On
+        // API 21-23 a pattern with one of them throws IllegalArgumentException
+        // when it is built, and the deserializer is built while ZeroBounceSDK
+        // initializes, so every call failed on those devices.
+        val api1Letters = "GyMwWDdFEaHkKhmsSzZ".toSet()
+        val patterns = mutableListOf<String>()
+        val deserializer = GsonDateDeserializer()
+        fun collect(value: Any?) {
+            when (value) {
+                is java.text.SimpleDateFormat -> patterns += value.toPattern()
+                is Iterable<*> -> value.forEach { item ->
+                    if (item is String) patterns += item else collect(item)
+                }
+            }
+        }
+        for (field in GsonDateDeserializer::class.java.declaredFields) {
+            field.isAccessible = true
+            val static = java.lang.reflect.Modifier.isStatic(field.modifiers)
+            collect(field.get(if (static) null else deserializer))
+        }
+        assertTrue("found no date patterns: $patterns", patterns.size >= 4)
+        for (pattern in patterns) {
+            val letters = pattern.replace(Regex("'[^']*'"), "").filter { it in 'A'..'Z' || it in 'a'..'z' }
+            val unsupported = letters.filterNot { it in api1Letters }
+            assertEquals("pattern \"$pattern\" needs API 24+", "", unsupported)
+        }
+    }
+
+    @Test
+    fun isoDatesParseToTheExactInstant() {
+        val gson = com.google.gson.GsonBuilder()
+            .registerTypeAdapter(java.util.Date::class.java, GsonDateDeserializer())
+            .create()
+        fun parse(text: String): Long? =
+            gson.fromJson("""{"upload_date":"$text"}""", ZBFileStatusResponse::class.java)
+                .let { response ->
+                    val field = ZBFileStatusResponse::class.java.getDeclaredField("uploadDate")
+                    field.isAccessible = true
+                    (field.get(response) as java.util.Date?)?.time
+                }
+        fun utc(text: String) = java.time.Instant.parse(text).toEpochMilli()
+        fun local(text: String) = java.time.LocalDateTime.parse(text)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        val expected = mapOf(
+            "2026-10-24T05:24:13Z" to utc("2026-10-24T05:24:13Z"),
+            "2026-10-24T05:24:13.123Z" to utc("2026-10-24T05:24:13.123Z"),
+            "2026-10-24T05:24:13+02:00" to utc("2026-10-24T03:24:13Z"),
+            "2026-10-24T05:24:13+0200" to utc("2026-10-24T03:24:13Z"),
+            "2026-10-24T05:24:13+02" to utc("2026-10-24T03:24:13Z"),
+            "2026-10-24T05:24:13.5-05:30" to utc("2026-10-24T10:54:13.500Z"),
+            "2026-10-24T05:24:13.1234567Z" to utc("2026-10-24T05:24:13.123Z"),
+            "2026-10-24T05:24:13" to local("2026-10-24T05:24:13"),
+            "2023-04-18 14:40:08.123" to local("2023-04-18T14:40:08.123"),
+            "2023-04-18 14:40:08" to local("2023-04-18T14:40:08"),
+            "04/18/2023 2:40:08 PM" to local("2023-04-18T14:40:08"),
+            "2023-04-18" to local("2023-04-18T00:00:00"),
+        )
+        for ((text, millis) in expected) {
+            assertEquals(text, millis, parse(text))
+        }
+        assertNull(parse(""))
+    }
+
+    @Test
+    fun blankEmailAndFileIdAreRejectedBeforeARequest() {
+        useSharedKey("blank-args-key")
+        val target = File(downloads, "never.csv").path
+        val emailCalls = mapOf<String, ((Any?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>(
+            "validate" to { ok, err -> ZeroBounceSDK.validate("", null, ok, err) },
+            "validate POST" to { ok, err ->
+                ZeroBounceSDK.validate(" ", null, ZBValidateOptions(usePost = true), ok, err)
+            },
+            "getActivityData" to { ok, err -> ZeroBounceSDK.getActivityData(" ", ok, err) },
+            "scoreEmail" to { ok, err -> ZeroBounceSDK.scoreEmail(" ", ok, err) },
+            "scoreEmailPost" to { ok, err -> ZeroBounceSDK.scoreEmailPost("\t", ok, err) },
+        )
+        val fileIdCalls = mapOf<String, ((Any?) -> Unit, (ErrorResponse?) -> Unit) -> Unit>(
+            "fileStatus" to { ok, err -> ZeroBounceSDK.fileStatus(" ", ok, err) },
+            "scoringFileStatus" to { ok, err -> ZeroBounceSDK.scoringFileStatus("", ok, err) },
+            "deleteFile" to { ok, err -> ZeroBounceSDK.deleteFile(" ", ok, err) },
+            "scoringDeleteFile" to { ok, err -> ZeroBounceSDK.scoringDeleteFile(" ", ok, err) },
+            "getFile" to { ok, err -> ZeroBounceSDK.getFile(context, " ", ok, err) },
+            "scoringGetFile" to { ok, err -> ZeroBounceSDK.scoringGetFile(context, " ", ok, err) },
+            "emailFinderFileStatus" to { ok, err -> ZeroBounceSDK.emailFinderFileStatus(" ", ok, err) },
+            "emailFinderGetFile" to { ok, err -> ZeroBounceSDK.emailFinderGetFile(" ", target, ok, err) },
+            "emailFinderDeleteFile" to { ok, err -> ZeroBounceSDK.emailFinderDeleteFile(" ", ok, err) },
+            "domainSearchFileStatus" to { ok, err -> ZeroBounceSDK.domainSearchFileStatus(" ", ok, err) },
+            "domainSearchGetFile" to { ok, err -> ZeroBounceSDK.domainSearchGetFile(" ", target, ok, err) },
+            "domainSearchDeleteFile" to { ok, err -> ZeroBounceSDK.domainSearchDeleteFile(" ", ok, err) },
+        )
+        for ((calls, parameter) in listOf(emailCalls to "email", fileIdCalls to "file_id")) {
+            for ((name, call) in calls) {
+                val outcome = await<Any> { ok, err -> call(ok, err) }
+                assertNull("$name returned a result", outcome.value)
+                assertEquals(name, "Empty parameter: $parameter", outcome.errorText())
+                assertEquals("$name status", 0, outcome.error?.statusCode)
+                assertEquals("$name sent a request", 0, fake.size())
+            }
+        }
+        val client = openClient("blank-args-client")
+        val viaClient = await<ZBValidateResponse> { ok, err -> client.validate("  ", null, ok, err) }
+        assertEquals("Empty parameter: email", viaClient.errorText())
+        assertEquals(0, fake.size())
+    }
+
+    @Test
+    fun deletingAnInboxPlacementTestAccepts204NoContent() {
+        // LIVE: DELETE /test/{id} answers 204 with an empty body.
+        useSharedKey("ipt-204-user")
+        var succeeded = false
+        val outcome = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.deleteInboxPlacementTest("t-1", { response ->
+                succeeded = true
+                ok(response)
+            }, err)
+        }
+        assertNull(outcome.errorText())
+        assertTrue(succeeded)
+        assertNull(outcome.value)
+        val request = onlyRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/api/ipt/test/t-1", request.path)
+
+        // An empty body with any other status is still an error.
+        useSharedKey("empty-ipt-user")
+        val empty = await<com.google.gson.JsonElement> { ok, err ->
+            ZeroBounceSDK.getInboxPlacementTest("t-1", ok, err)
+        }
+        assertTrue(empty.errorText().orEmpty().contains("Empty response"))
+    }
+
+    @Test
+    fun anAccountLevelBatchErrorCarriesItsHttpStatus() {
+        useSharedKey("batch-account-status")
+        val batch = await<ZBValidateBatchResponse> { ok, err ->
+            ZeroBounceSDK.validateBatch(listOf(ZBValidateBatchData("a@example.com", null)), ok, err)
+        }
+        assertTrue(batch.errorText().orEmpty().contains("Invalid API Key"))
+        assertEquals(200, batch.error?.statusCode)
+    }
+
+    @Test
+    fun invalidJsonCarriesItsHttpStatus() {
+        for (status in listOf(200, 502)) {
+            useSharedKey("broken-json-$status-user")
+            val outcome = await<ZBValidateResponse> { ok, err ->
+                ZeroBounceSDK.validate("a@example.com", null, ok, err)
+            }
+            assertEquals("ZeroBounce returned a response that is not valid JSON.", outcome.errorText())
+            assertEquals(status, outcome.error?.statusCode)
+        }
+    }
+
+    @Test
+    fun aLargeDownloadIsSavedByteForByte() {
+        useSharedKey("big-file-user")
+        val expected = FakeApi.bigCsv("big-file-user")
+        val outcome = await<ZBGetFileResponse> { ok, err -> ZeroBounceSDK.getFile(context, "fid", ok, err) }
+        assertNull(outcome.errorText())
+        assertEquals(expected, File(outcome.value!!.localFilePath).readText())
+
+        val finder = File(downloads, "nested/finder.csv")
+        val finderOutcome = await<ZBGetFileResponse> { ok, err ->
+            ZeroBounceSDK.emailFinderGetFile("fid", finder.path, ok, err)
+        }
+        assertNull(finderOutcome.errorText())
+        assertEquals(expected, finder.readText())
+    }
+
+    @Test
+    fun everyBaseUrlFormBuildsSingleSlashRequestUrls() {
+        // ZBConstants end in "/v2/". Joined as "$base/validate" they produced
+        // "/v2//validate". initialize must strip trailing slashes from any base.
+        val bases = listOf(
+            ZBConstants.API_DEFAULT_URL to "https://api.zerobounce.net/v2",
+            ZBConstants.API_USA_URL to "https://api-us.zerobounce.net/v2",
+            ZBConstants.API_EU_URL to "https://api-eu.zerobounce.net/v2",
+            "https://api.zerobounce.net/v2" to "https://api.zerobounce.net/v2",
+            "https://custom.example.test/zb/v2/" to "https://custom.example.test/zb/v2",
+            "https://custom.example.test/zb/v2//" to "https://custom.example.test/zb/v2",
+        )
+        for ((base, expected) in bases) {
+            resetSharedUrls()
+            ZeroBounceSDK.transportInterceptor = fake
+            ZeroBounceSDK.initialize("base-url-key", base)
+
+            await<ZBValidateResponse> { ok, err -> ZeroBounceSDK.validate("person@example.com", null, ok, err) }
+            assertEquals(base, "$expected/validate", onlyRequest().url)
+
+            await<ZBValidateBatchResponse> { ok, err ->
+                ZeroBounceSDK.validateBatch(listOf(ZBValidateBatchData("a@example.com", null)), ok, err)
+            }
+            assertEquals(base, "$expected/validatebatch", onlyRequest().url)
+
+            await<ZBFindEmailResponse> { ok, err ->
+                ZeroBounceSDK.findEmail("Ada", domain = "example.com", responseCallback = ok, errorCallback = err)
+            }
+            assertEquals(base, "$expected/guessformat", onlyRequest().url)
+
+            await<com.google.gson.JsonElement> { ok, err -> ZeroBounceSDK.listFilters(false, ok, err) }
+            assertEquals(base, "$expected/filters/list", onlyRequest().url)
+
+            // The bulk API has its own base, which initialize does not change.
+            await<ZBSendFileResponse> { ok, err ->
+                ZeroBounceSDK.sendFile(
+                    context = context,
+                    file = csvFile,
+                    emailAddressColumnIndex = 1,
+                    responseCallback = ok,
+                    errorCallback = err,
+                )
+            }
+            assertEquals(base, "https://bulkapi.zerobounce.net/v2/sendfile", onlyRequest().url)
+            assertEquals(base, expected, ZeroBounceSDK.apiBaseUrl)
+        }
+    }
+
+    @Test
+    fun clientInitializeNormalisesTheBaseUrl() {
+        val sdk = ZeroBounceClient()
+        sdk.transportInterceptor = fake
+        sdk.initialize("client-base-key", ZBConstants.API_EU_URL)
+        await<ZBValidateResponse> { ok, err -> sdk.validate("person@example.com", null, ok, err) }
+        assertEquals("https://api-eu.zerobounce.net/v2/validate", onlyRequest().url)
+    }
+
     private fun openClient(key: String): ZeroBounceClient {
         val sdk = ZeroBounceClient()
         sdk.transportInterceptor = fake
@@ -1764,6 +2059,8 @@ internal class RecordedRequest(
     val userAgent: String?,
     /** The Authorization header, for the Inbox Placement Tester's Bearer key. */
     val authorization: String? = null,
+    /** Scheme, host and percent-encoded path, without the query string. */
+    val url: String = "",
 )
 
 internal class FakeApi : Interceptor {
@@ -1797,6 +2094,7 @@ internal class FakeApi : Interceptor {
             fields = fields,
             userAgent = request.header("User-Agent"),
             authorization = authorization,
+            url = "${request.url.scheme}://${request.url.host}${request.url.encodedPath}",
         )
         records.add(recorded)
         Thread.sleep(Random.nextInt(21).toLong())
@@ -1882,6 +2180,17 @@ internal class FakeApi : Interceptor {
                 """{"type":"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1020/","title":"Error 1020: Access denied","status":403,"detail":"The request was blocked by a Cloudflare firewall rule configured by the site owner.","error_code":1020,"cloudflare_error":true,"what_you_should_do":"Do not retry. This block is intentional."}""",
             )
         }
+        if (key.startsWith("ipt-204-") && request.method == "DELETE") {
+            return Answer(204, "text/plain", "")
+        }
+        if (key.startsWith("broken-json-")) {
+            // A JSON body cut off part way, on the status named in the key.
+            val status = key.removePrefix("broken-json-").substringBefore('-').toInt()
+            return Answer(status, "application/json", """{"address":""")
+        }
+        if (key.startsWith("big-file-") && request.path.contains("getfile")) {
+            return Answer(200, "application/octet-stream", bigCsv(key))
+        }
         if (key.startsWith("ipt-detail")) {
             // The Inbox Placement Tester is a Django REST framework app and
             // reports errors under "detail".
@@ -1892,6 +2201,32 @@ internal class FakeApi : Interceptor {
         }
         if (key.startsWith("jsonerr-")) {
             return Answer(200, "text/plain", """{"success":false,"message":"file not ready"}""")
+        }
+        // LIVE (2026-11-11): what an invalid or drained key gets back, each with
+        // an HTTP 200 and no "success" field.
+        if (key.startsWith("dead-key-")) {
+            val body = when {
+                request.path.contains("guessformat") ->
+                    """{"Message":"Invalid API key or your account ran out of credits"}"""
+                request.path.contains("filters") ->
+                    """{  "Error": "Invalid API key or your account ran out of credits"}"""
+                request.path.contains("getapiusage") -> """{"error":"Invalid API key"}"""
+                request.path.contains("getcredits") -> """{"Credits":"-1"}"""
+                else -> """{"error":"Invalid API key or your account ran out of credits"}"""
+            }
+            return Answer(200, "application/json", body)
+        }
+        // The documented answer to a repeated greylist_processing validate: a
+        // result whose only field is Message, not an error.
+        if (key.startsWith("greylist-pending-") && request.path.endsWith("/validate")) {
+            return Answer(
+                200,
+                "application/json",
+                """{"Message":"Greylist validation still in progress. Please try again later."}""",
+            )
+        }
+        if (key.startsWith("filter-message-") && request.path.contains("filters")) {
+            return Answer(200, "application/json", """{"Message":"Filter has been added."}""")
         }
         if (request.path.contains("validatebatch") && key.startsWith("batch-account-")) {
             return Answer(
@@ -1940,6 +2275,12 @@ internal class FakeApi : Interceptor {
     companion object {
         private val NAME = Regex("""name="([^"]*)"""")
         private val FILE_NAME = Regex("""filename="([^"]*)"""")
+
+        /** A results file several times larger than the download sniff window. */
+        fun bigCsv(key: String): String = buildString {
+            append("email,status\n")
+            for (row in 0 until 60_000) append(key).append('+').append(row).append("@example.com,valid\n")
+        }
 
         fun accessDeniedPage(): String = buildString {
             append("<!DOCTYPE html><html lang=\"en-US\"><head><title>")

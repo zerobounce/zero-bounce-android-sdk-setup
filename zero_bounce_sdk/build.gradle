@@ -10,7 +10,7 @@ plugins {
 ext {
     PUBLISH_GROUP_ID = 'com.zerobounce.android'
     // Only bump this when releasing; do not use for plugins/dependencies (they have their own versions).
-    PUBLISH_VERSION = '2.2.0'
+    PUBLISH_VERSION = '2.3.0'
     PUBLISH_ARTIFACT_ID = 'zerobouncesdk'
 }
 
@@ -81,7 +81,6 @@ dokka {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'
     implementation 'com.google.code.gson:gson:2.14.0'
 

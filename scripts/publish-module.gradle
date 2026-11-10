@@ -54,9 +54,9 @@ afterEvaluate {
                     }
 
                     scm {
-                        connection = 'scm:git:github.com/zerobounce/zero-bounce-android-sdk-setup.git'
-                        developerConnection = 'scm:git:ssh:/github.com/zerobounce/zero-bounce-android-sdk-setup.git'
-                        url = 'https://github.com/zerobounce/zero-bounce-android-sdk-setup/tree/main'
+                        connection = 'scm:git:https://github.com/zerobounce/zero-bounce-android-sdk-setup.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/zerobounce/zero-bounce-android-sdk-setup.git'
+                        url = 'https://github.com/zerobounce/zero-bounce-android-sdk-setup'
                     }
                 }
             }

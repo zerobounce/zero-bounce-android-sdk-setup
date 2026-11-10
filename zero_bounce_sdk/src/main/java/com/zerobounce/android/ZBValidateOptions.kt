@@ -2,6 +2,9 @@ package com.zerobounce.android
 
 /**
  * Optional query/body parameters for GET /validate and POST /validatebatch.
+ *
+ * `validate` sends every option that is set. `validateBatch` sends only
+ * [timeout], [activityData] and [verifyPlus], and ignores the rest.
  */
 data class ZBValidateOptions(
     /** Validation timeout in seconds (3–60 for single validate, 10–120 for batch). */

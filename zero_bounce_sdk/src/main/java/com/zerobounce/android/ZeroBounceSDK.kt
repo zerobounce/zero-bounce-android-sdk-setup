@@ -23,8 +23,6 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.File
-import java.io.FileNotFoundException
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.URLEncoder
@@ -119,7 +117,9 @@ object ZeroBounceSDK {
      * Initializes the SDK.
      *
      * @param apiKey the API key
-     * @param apiBaseUrl the API base URL
+     * @param apiBaseUrl the API base URL, such as one of the [ZBConstants]. Trailing
+     * slashes are removed, so `https://api-eu.zerobounce.net/v2/` and
+     * `https://api-eu.zerobounce.net/v2` both send `validate` to `.../v2/validate`.
      */
     fun initialize(apiKey: String, apiBaseUrl: String? = null) {
         val builder = OkHttpClient.Builder()
@@ -133,7 +133,7 @@ object ZeroBounceSDK {
         this.apiKey = apiKey
         apiBaseUrl?.let {
             require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
-            this.apiBaseUrl = it
+            this.apiBaseUrl = it.trimEnd('/')
         }
     }
 
@@ -213,6 +213,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(email, "email", errorCallback)) return
         if (options != null && !checkValidateTimeout(options.timeout, errorCallback)) return
         if (!checkCallbackUrl(options, errorCallback)) return
 
@@ -276,6 +277,10 @@ object ZeroBounceSDK {
 
     /**
      * Validates a batch of emails with optional v2 body parameters.
+     *
+     * Only [ZBValidateOptions.timeout] (10-120 seconds), [ZBValidateOptions.activityData]
+     * and [ZBValidateOptions.verifyPlus] are sent. `domainInfo`, `greylistProcessing`,
+     * `callbackUrl` and `usePost` are ignored: the batch is always a JSON POST.
      */
     fun validateBatch(
         emails: List<ZBValidateBatchData>,
@@ -298,13 +303,13 @@ object ZeroBounceSDK {
         options?.activityData?.let { body["activity_data"] = it }
         options?.verifyPlus?.let { body["verify_plus"] = it }
 
-        request<ZBValidateBatchResponse>(
+        requestWithStatus<ZBValidateBatchResponse>(
             url = "$apiBaseUrl/validatebatch",
             body = body,
-            responseCallback = { parsed ->
+            responseCallback = { parsed, statusCode ->
                 val accountMessage = accountLevelBatchError(parsed)
                 if (accountMessage != null) {
-                    errorCallback(ErrorResponse(errors = arrayListOf(accountMessage)))
+                    errorCallback(ErrorResponse(errors = arrayListOf(accountMessage), statusCode = statusCode))
                 } else {
                     responseCallback(parsed)
                 }
@@ -397,7 +402,8 @@ object ZeroBounceSDK {
             url = url,
             body = null,
             responseCallback = responseCallback,
-            errorCallback = errorCallback
+            errorCallback = errorCallback,
+            messageOnlyIsFailure = true,
         )
     }
 
@@ -445,7 +451,8 @@ object ZeroBounceSDK {
             url = url,
             body = null,
             responseCallback = responseCallback,
-            errorCallback = errorCallback
+            errorCallback = errorCallback,
+            messageOnlyIsFailure = true,
         )
     }
 
@@ -484,7 +491,8 @@ object ZeroBounceSDK {
             url = url,
             body = null,
             responseCallback = responseCallback,
-            errorCallback = errorCallback
+            errorCallback = errorCallback,
+            messageOnlyIsFailure = true,
         )
     }
 
@@ -944,6 +952,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         request(
@@ -1036,6 +1045,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val params = mutableListOf("api_key" to (apiKey ?: ""), "file_id" to fileId)
@@ -1052,24 +1062,20 @@ object ZeroBounceSDK {
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    val bytes = it.body.bytes()
-                    val text = bytes.toString(Charsets.UTF_8)
-                    val contentType = it.body.contentType()?.toString()
-                        ?: it.header("Content-Type").orEmpty()
-                    if (downloadRejected(it.code, contentType, bytes)) {
-                        errorCallback(httpError(it.code, text))
-                        return
-                    }
                     val fileName =
                         it.headers["content-disposition"]?.substringAfter("filename=")
                             ?.substringBefore(";")
+                    // Only the last path component of the server's name is
+                    // used, so the file stays inside the app's files directory.
                     val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
                     val file = File(context.getExternalFilesDir(null), name)
                     try {
-                        FileOutputStream(file.path).use { fos -> fos.write(bytes) }
-                        responseCallback(ZBGetFileResponse(file.path))
-                    } catch (e: FileNotFoundException) {
-                        errorCallback(ErrorResponse.parseError(e.message))
+                        val error = saveDownload(it, file)
+                        if (error != null) {
+                            errorCallback(error)
+                        } else {
+                            responseCallback(ZBGetFileResponse(file.path))
+                        }
                     } catch (e: IOException) {
                         errorCallback(ErrorResponse.parseError(e.message))
                     }
@@ -1137,6 +1143,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
 
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         request(
@@ -1164,6 +1171,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(email, "email", errorCallback)) return
 
         request(
             url = urlWithQuery(
@@ -1214,6 +1222,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootFileStatus(priority3EmailFinderBaseUrl(), fileId, responseCallback, errorCallback)
     }
 
@@ -1224,6 +1233,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootGetFile(priority3EmailFinderBaseUrl(), fileId, downloadPath, responseCallback, errorCallback)
     }
 
@@ -1233,6 +1243,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootDeleteFile(priority3EmailFinderBaseUrl(), fileId, responseCallback, errorCallback)
     }
 
@@ -1272,6 +1283,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootFileStatus(priority3DomainSearchBaseUrl(), fileId, responseCallback, errorCallback)
     }
 
@@ -1282,6 +1294,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootGetFile(priority3DomainSearchBaseUrl(), fileId, downloadPath, responseCallback, errorCallback)
     }
 
@@ -1291,6 +1304,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(fileId, "file_id", errorCallback)) return
         priority3Api.bulkRootDeleteFile(priority3DomainSearchBaseUrl(), fileId, responseCallback, errorCallback)
     }
 
@@ -1690,6 +1704,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(email, "email", errorCallback)) return
 
         request(
             url = urlWithQuery(
@@ -1711,6 +1726,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit
     ) {
         if (invalidApiKey(errorCallback)) return
+        if (blankParameter(email, "email", errorCallback)) return
         val key = apiKey ?: return
 
         requestFormPost(
@@ -1739,6 +1755,22 @@ object ZeroBounceSDK {
         return false
     }
 
+    /**
+     * Rejects a blank or whitespace-only [value] for the parameter [name]
+     * through [errorCallback], before any request is sent.
+     *
+     * @return **true** if the value was rejected
+     */
+    private fun blankParameter(
+        value: String,
+        name: String,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): Boolean {
+        if (value.isNotBlank()) return false
+        errorCallback(ErrorResponse.parseError("Empty parameter: $name"))
+        return true
+    }
+
     private fun redactSecret(value: String): String {
         return value.replace(Regex("(?i)([?&]api_key=)[^&]*"), "$1REDACTED")
     }
@@ -1756,7 +1788,27 @@ object ZeroBounceSDK {
         url: String,
         body: Map<String, Any>?,
         crossinline responseCallback: (response: T?) -> Unit,
-        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit
+        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        messageOnlyIsFailure: Boolean = false,
+    ) where T : JSONConvertable = requestWithStatus<T>(
+        url = url,
+        body = body,
+        responseCallback = { parsed, _ -> responseCallback(parsed) },
+        errorCallback = errorCallback,
+        messageOnlyIsFailure = messageOnlyIsFailure,
+    )
+
+    /**
+     * [request], with the HTTP status of the response passed on to
+     * [responseCallback], for a caller that can still turn a parsed body into
+     * an error.
+     */
+    private inline fun <reified T> requestWithStatus(
+        url: String,
+        body: Map<String, Any>?,
+        crossinline responseCallback: (response: T?, statusCode: Int) -> Unit,
+        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        messageOnlyIsFailure: Boolean = false,
     ) where T : JSONConvertable {
         if (logEnabled) {
             Log.d("ZeroBounceSDK", "request url: ${redactSecret(url)}")
@@ -1781,8 +1833,13 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
+                // The email finder and domain search: see messageOnlyBody.
+                if (messageOnlyIsFailure && json != null && response.code <= 299 && messageOnlyBody(json)) {
+                    errorCallback(httpError(response.code, json))
+                    return
+                }
                 acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<T>())
+                    responseCallback(it.toObject<T>(), response.code)
                 }
             }
 
@@ -2007,10 +2064,15 @@ object ZeroBounceSDK {
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
+                // LIVE: DELETE /test/{id} answers 204 No Content with an empty
+                // body. That is the success, so it must not reach acceptJson,
+                // which reports any empty body as an error.
+                if (response.code == 204) {
+                    responseCallback(null)
+                    return
+                }
                 acceptJson(response.code, json, errorCallback) { text ->
-                    // DELETE answers with an empty body.
-                    if (text.isBlank()) responseCallback(null)
-                    else responseCallback(JsonParser.parseString(text))
+                    responseCallback(JsonParser.parseString(text))
                 }
             }
 
@@ -2082,15 +2144,14 @@ object ZeroBounceSDK {
     ): Callback = object : Callback {
         override fun onResponse(call: Call, response: Response) {
             response.use {
-                val bodyBytes = it.body.bytes()
-                val bodyStr = bodyBytes.toString(Charsets.UTF_8)
-                val contentType = it.header("Content-Type").orEmpty()
-                if (downloadRejected(it.code, contentType, bodyBytes)) {
-                    errorCallback(httpError(it.code, bodyStr))
-                    return
-                }
+                val file = File(downloadPath)
                 try {
-                    responseCallback(Priority3Api.writeDownloadFile(downloadPath, bodyBytes))
+                    val error = saveDownload(it, file)
+                    if (error != null) {
+                        errorCallback(error)
+                    } else {
+                        responseCallback(ZBGetFileResponse(file.path))
+                    }
                 } catch (e: IOException) {
                     errorCallback(ErrorResponse.parseError(e.message))
                 }
