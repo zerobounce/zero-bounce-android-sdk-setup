@@ -174,10 +174,20 @@ class LiveApiTest {
         println("Validation API (free calls)")
         var before: String? = null
 
-        check("getCredits returns a balance") {
+        check("getCredits returns a positive balance") {
             val outcome = await<ZBCreditsResponse> { ok, err -> ZeroBounceSDK.getCredits(ok, err) }
             before = outcome.value?.credits
-            if (before == null) ran(outcome) ?: "no credits in the response" else null
+            // LIVE: -1 is the API's answer for an INVALID key, not a balance.
+            // Accepting any value that parsed let a dead key sail through the
+            // one check meant to catch it while every billable call below
+            // failed.
+            val balance = before?.trim()?.toLongOrNull()
+            when {
+                before == null -> ran(outcome) ?: "no credits in the response"
+                balance == null -> "credits is not a number: $before"
+                balance <= 0L -> "not a usable credit balance: $balance"
+                else -> null
+            }
         }
 
         check("getApiUsage parses the documented date formats") {
