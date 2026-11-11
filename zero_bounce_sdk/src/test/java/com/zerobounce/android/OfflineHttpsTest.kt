@@ -15,6 +15,10 @@ import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
+import java.util.Date
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -26,6 +30,13 @@ import java.util.concurrent.TimeUnit
  * test, so a default that had turned into http:// would pass there. This one
  * uses a fresh [ZeroBounceClient], which starts from the defaults, and checks
  * the default of every base URL directly.
+ *
+ * [everyPublicRequestMethodSendsOverHttps] finds the request methods by
+ * reflection (every public method of [ZeroBounceClient] that takes a callback)
+ * and invokes each overload by reflection. [sweepArgs] gives each one the
+ * arguments other than its callbacks; a public request method missing from it
+ * fails [everyPublicRequestMethodIsInTheSweep], so a new request path cannot
+ * skip the sweep.
  */
 class OfflineHttpsTest {
 
@@ -151,5 +162,155 @@ class OfflineHttpsTest {
         )) {
             assertTrue("nothing went to $prefix: ${recorder.urls}", recorder.urls.any { it.startsWith(prefix) })
         }
+    }
+
+    /** Signature, as [signature] prints it, to the arguments other than the callbacks. */
+    private fun sweepArgs(): Map<String, () -> Array<Any?>> {
+        val email = "a@example.com"
+        val out = File(dir, "out.csv").path
+        fun stream() = ByteArrayInputStream("email\na@example.com\n".toByteArray())
+        fun job() = ZBBulkFileJobOptions(fileName = "f.csv", returnUrl = "https://example.com/done")
+        return linkedMapOf(
+            "validate(String,String)" to { arrayOf(email, null) },
+            "validate(String,String,ZBValidateOptions)" to { arrayOf(email, null, ZBValidateOptions()) },
+            "validateBatch(List)" to { arrayOf(listOf(ZBValidateBatchData(email, null))) },
+            "validateBatch(List,ZBValidateOptions)" to { arrayOf(listOf(ZBValidateBatchData(email, null)), null) },
+            "guessFormat(String,String,String,String)" to { arrayOf("example.com", "Ann", null, null) },
+            "findEmail(String,String,String,String,String)" to { arrayOf("Ann", "example.com", null, null, null) },
+            "findDomain(String,String)" to { arrayOf("example.com", null) },
+            "getApiUsage(Date,Date)" to { arrayOf(Date(0), Date(86_400_000L)) },
+            "getCredits()" to { arrayOf() },
+            "getActivityData(String)" to { arrayOf(email) },
+            "scoreEmail(String)" to { arrayOf(email) },
+            "scoreEmailPost(String)" to { arrayOf(email) },
+            // bulk validation and scoring
+            "sendFile(Context,File,int,Integer,Integer,Integer,Integer,String,boolean,Boolean,Boolean)" to
+                { arrayOf(context, csv, 1, null, null, null, null, null, false, null, null) },
+            "sendFile(InputStream,String,int,Integer,Integer,Integer,Integer,String,boolean,Boolean,Boolean)" to
+                { arrayOf(stream(), "in.csv", 1, null, null, null, null, null, false, null, null) },
+            "fileStatus(String)" to { arrayOf("fid") },
+            "getFile(Context,String,ZBDownloadType,Boolean)" to { arrayOf(context, "fid", null, null) },
+            "deleteFile(String)" to { arrayOf("fid") },
+            "scoringSendFile(Context,File,int,String,boolean,Boolean)" to { arrayOf(context, csv, 1, null, false, null) },
+            "scoringSendFile(InputStream,String,int,String,boolean,Boolean)" to { arrayOf(stream(), "in.csv", 1, null, false, null) },
+            "scoringFileStatus(String)" to { arrayOf("fid") },
+            "scoringGetFile(Context,String,ZBDownloadType)" to { arrayOf(context, "fid", null) },
+            "scoringDeleteFile(String)" to { arrayOf("fid") },
+            // email finder and domain search files
+            "sendEmailFinderFile(File,int,ZBEmailFinderSendFileOptions)" to
+                { arrayOf(csv, 1, ZBEmailFinderSendFileOptions(firstNameColumn = 2)) },
+            "sendEmailFinderFileStream(InputStream,String,int,ZBEmailFinderSendFileOptions)" to
+                { arrayOf(stream(), "in.csv", 1, ZBEmailFinderSendFileOptions(firstNameColumn = 2)) },
+            "emailFinderFileStatus(String)" to { arrayOf("fid") },
+            "emailFinderGetFile(String,String)" to { arrayOf("fid", out) },
+            "emailFinderDeleteFile(String)" to { arrayOf("fid") },
+            "sendDomainSearchFile(File,int,ZBDomainSearchSendFileOptions)" to { arrayOf(csv, 1, null) },
+            "sendDomainSearchFileStream(InputStream,String,int,ZBDomainSearchSendFileOptions)" to
+                { arrayOf(stream(), "in.csv", 1, null) },
+            "domainSearchFileStatus(String)" to { arrayOf("fid") },
+            "domainSearchGetFile(String,String)" to { arrayOf("fid", out) },
+            "domainSearchDeleteFile(String)" to { arrayOf("fid") },
+            // list evaluator
+            "sendListEvaluatorFile(File,int)" to { arrayOf(csv, 1) },
+            "sendListEvaluatorFileStream(InputStream,String,int)" to { arrayOf(stream(), "in.csv", 1) },
+            "getListEvaluatorResult(String)" to { arrayOf("fid") },
+            "sendEvaluatedFile(String)" to { arrayOf("fid") },
+            // filters
+            "addFilter(String,String,String)" to { arrayOf("allow", "email", email) },
+            "deleteFilter(String,String,String)" to { arrayOf("allow", "email", email) },
+            "listFilters(boolean)" to { arrayOf(false) },
+            // S3 and SFTP jobs
+            "listS3Files(String,String)" to { arrayOf("bucket", null) },
+            "validateS3File(ZBValidateS3FileOptions)" to
+                { arrayOf(ZBValidateS3FileOptions(fileName = "f.csv", returnUrl = "https://example.com/done")) },
+            "scoreS3File(ZBScoreS3FileOptions)" to
+                { arrayOf(ZBScoreS3FileOptions(fileName = "f.csv", returnUrl = "https://example.com/done")) },
+            "exportS3File(String,String)" to { arrayOf("fid", "bucket") },
+            "emailFinderS3File(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "domainSearchS3File(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "validateSFTPFile(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "scoreSFTPFile(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "emailFinderSFTPFile(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "domainSearchSFTPFile(ZBBulkFileJobOptions)" to { arrayOf(job()) },
+            "exportSFTPFile(String,String)" to { arrayOf("fid", "/out") },
+            // Inbox Placement Tester
+            "getInboxPlacementProviders()" to { arrayOf() },
+            "getInboxPlacementTestTypes()" to { arrayOf() },
+            "createInboxPlacementTest(String,ZBCreateInboxPlacementTestOptions)" to { arrayOf("Launch", null) },
+            "getInboxPlacementTest(String)" to { arrayOf("t1") },
+            "listInboxPlacementTests(ZBListInboxPlacementTestsOptions)" to { arrayOf(null) },
+            "deleteInboxPlacementTest(String)" to { arrayOf("t1") },
+            "getInboxPlacementWebhook()" to { arrayOf() },
+            "setInboxPlacementWebhook(String)" to { arrayOf("https://example.com/ipt") },
+        )
+    }
+
+    private fun isCallback(type: Class<*>) = type == Function1::class.java
+
+    /** The public request methods of [type]: public instance methods that take a callback. */
+    private fun requestMethods(type: Class<*>): List<Method> = type.declaredMethods
+        .filter { Modifier.isPublic(it.modifiers) && !Modifier.isStatic(it.modifiers) }
+        .filter { !it.isSynthetic && !it.isBridge && !it.name.contains('$') }
+        .filter { method -> method.parameterTypes.any { isCallback(it) } }
+
+    /** `name(Type,Type)` with simple type names, callbacks left out. */
+    private fun signature(method: Method): String = method.name + method.parameterTypes
+        .filterNot { isCallback(it) }
+        .joinToString(",", "(", ")") { it.simpleName }
+
+    @Test
+    fun everyPublicRequestMethodIsInTheSweep() {
+        val client = requestMethods(ZeroBounceClient::class.java).map { signature(it) }.toSortedSet()
+        val shared = requestMethods(ZeroBounceSDK::class.java).map { signature(it) }.toSortedSet()
+        assertTrue("found only ${client.size} request methods: $client", client.size >= 50)
+        // ZeroBounceClient is swept; ZeroBounceSDK runs the same code, so each must match.
+        assertEquals("ZeroBounceSDK and ZeroBounceClient request methods differ", shared, client)
+        val swept = sweepArgs().keys
+        assertEquals("public request methods missing from the HTTPS sweep", sortedSetOf<String>(), client - swept)
+        assertEquals("sweep entries that match no public request method", sortedSetOf<String>(), swept - client)
+    }
+
+    @Test
+    fun everyPublicRequestMethodSendsOverHttps() {
+        val recorder = Recorder()
+        val sdk = ZeroBounceClient()
+        sdk.transportInterceptor = recorder
+        sdk.initialize("https-sweep-key")
+        val args = sweepArgs()
+        val failures = mutableListOf<String>()
+        var swept = 0
+        for (method in requestMethods(ZeroBounceClient::class.java)) {
+            val signature = signature(method)
+            val before = args[signature]?.invoke() ?: continue // reported by everyPublicRequestMethodIsInTheSweep
+            val latch = CountDownLatch(1)
+            val outcome = CopyOnWriteArrayList<Any?>()
+            val callback: (Any?) -> Unit = { value ->
+                outcome.add(value)
+                latch.countDown()
+            }
+            var next = 0
+            val call = method.parameterTypes.map { type -> if (isCallback(type)) callback else before[next++] }
+            assertEquals("$signature: argument count", before.size, next)
+
+            recorder.urls.clear()
+            try {
+                method.invoke(sdk, *call.toTypedArray())
+            } catch (e: InvocationTargetException) {
+                failures.add("$signature threw ${e.cause}")
+                continue
+            }
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                failures.add("$signature did not call back")
+            }
+            if (recorder.urls.isEmpty()) {
+                failures.add("$signature sent no request: $outcome")
+            }
+            for (url in recorder.urls) {
+                if (!url.startsWith("https://")) failures.add("$signature sent over plain http: $url")
+            }
+            swept++
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
+        assertEquals("every sweep entry was invoked", args.size, swept)
     }
 }

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Repository only: the HTTPS test sweeps every public request method of `ZeroBounceClient`, found and invoked by reflection, instead of 22 chosen calls, and fails if a public request method is missing from the sweep or if `ZeroBounceSDK` and `ZeroBounceClient` offer different request methods.
+
 ## [3.0.0] - 2026-11-12
 
 ### Breaking
