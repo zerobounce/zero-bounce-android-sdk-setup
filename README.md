@@ -814,3 +814,7 @@ ZeroBounceSDK.initialize(apiKey = "<YOUR_API_KEY>", apiBaseUrl = ZBConstants.API
 2. **Actions → Publish → Run workflow** with that tag.
 
 Registry: [com.zerobounce.android:zerobouncesdk on Maven Central](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
