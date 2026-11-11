@@ -20,6 +20,10 @@ You can install ZeroBounceSDK by adding the dependency to your gradle file:
 implementation 'com.zerobounce.android:zerobouncesdk:<latest_version>'
 ```
 
+The library's manifest declares `android.permission.INTERNET`, which the manifest merger adds to your app, so you do not need to declare it yourself.
+
+If your app is minified with R8 or ProGuard, nothing extra is needed either: the AAR ships consumer rules (`consumer-rules.pro`) that keep the response models Gson reads by field name. Without them a minified app would read most response fields as `null`, `false` or `0`.
+
 ## USAGE
 Import the sdk in your file:
 ```kotlin

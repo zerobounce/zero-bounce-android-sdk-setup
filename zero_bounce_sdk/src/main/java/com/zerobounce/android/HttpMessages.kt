@@ -141,25 +141,15 @@ internal fun successMeansFailure(body: String): Boolean {
     }
 }
 
-internal fun deliverJson(
-    statusCode: Int,
-    body: String?,
-    errorCallback: (ErrorResponse?) -> Unit,
-    onJson: (String) -> Unit,
-) {
-    val text = body?.trim().orEmpty()
-    val startsJson = text.startsWith("{") || text.startsWith("[")
-    if (statusCode > 299 || text.isEmpty() || looksLikeHtml(body.orEmpty()) || !startsJson ||
-        successMeansFailure(text) || errorOnlyBody(text)
-    ) {
-        errorCallback(httpError(statusCode, body))
-        return
+/**
+ * The error for a body the SDK could not decode. A boolean that is not one is
+ * reported by name; anything else as [httpError] reports the body.
+ */
+internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): ErrorResponse {
+    if (cause is StrictBooleanException) {
+        return ErrorResponse(errors = arrayListOf(cause.message.orEmpty()), statusCode = statusCode)
     }
-    try {
-        onJson(text)
-    } catch (_: Throwable) {
-        errorCallback(httpError(statusCode, body))
-    }
+    return httpError(statusCode, body)
 }
 
 internal fun downloadRejected(statusCode: Int, contentType: String, bytes: ByteArray): Boolean {
@@ -197,7 +187,12 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     if (mayBeError) {
         val bytes = response.body.bytes()
         if (downloadRejected(code, contentType, bytes)) {
-            return httpError(code, bytes.toString(Charsets.UTF_8))
+            val error = httpError(code, bytes.toString(Charsets.UTF_8))
+            if (error.errors.isEmpty()) {
+                // {"success": false} with no message.
+                error.errors = arrayListOf("ZeroBounce returned an error instead of the file (HTTP $code).")
+            }
+            return error
         }
         writeDownload(file) { it.write(bytes) }
         return null

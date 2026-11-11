@@ -758,13 +758,17 @@ class ZeroBounceWarmup {
                 errorCallback(redacted(httpError(statusCode, text), secrets))
                 return@send
             }
-            try {
-                // LIVE: not every endpoint answers with an object. /seeds is a
-                // JSON array and /seed-count is a bare number.
-                responseCallback(JsonParser.parseString(text))
-            } catch (_: Throwable) {
+            // LIVE: not every endpoint answers with an object. /seeds is a
+            // JSON array and /seed-count is a bare number. Only the parse is
+            // inside the try, so an exception from the caller's own callback
+            // propagates instead of reaching errorCallback.
+            val parsed = try {
+                JsonParser.parseString(text)
+            } catch (_: Exception) {
                 errorCallback(redacted(httpError(statusCode, text), secrets))
+                return@send
             }
+            responseCallback(parsed)
         }
     }
 

@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- An exception thrown by your own response or error callback now propagates instead of being reported through the error callback. Callbacks run on OkHttp's dispatcher thread, so the exception reaches that thread's uncaught-exception handler, which on Android ends the app by default. In 2.3.0 an exception thrown by the response callback of any call that decodes a JSON response (every call except the file downloads), and of the `ZeroBounceWarmup` JSON calls, was caught and handed to the error callback as if the request had failed, and an exception thrown by the error callback for a `validateBatch` account-level failure made the SDK call the error callback a second time. The error callback now receives only failed requests: transport failures, error responses, and bodies the SDK cannot read.
+
+#### Upgrading from 2.3
+
+- If a response or error callback can throw, catch the exception inside the callback.
+
+### Added
+
+- The library manifest declares `android.permission.INTERNET`, so the manifest merger adds it to your app. Every SDK call needs it.
+
+### Changed
+
+- `initialize` (and `ZeroBounceClient.initialize`) refuses an API key with surrounding whitespace or control characters, such as a key read from a file with its trailing newline, as `ZeroBounceWarmup.initialize` already did. The key is not stored or sent, and every call reports "api_key has surrounding whitespace or control characters" through its error callback, with status 0, until `initialize` is called with a clean key. In 2.3.0 such a key was sent as given. A key with spaces inside it is unchanged.
+- Booleans in responses (`freeEmail`, `mxFound`, `catchallDomain`, `found`, `success`) are read strictly: `true`/`false`, the strings `"true"`/`"false"` in any case, and `1`/`0` as a number or a string. In 2.3.0 the strings `"yes"` and `"1"` were read as `false`, and a bare `1` or `0` reached the error callback with every value of the response as its message. Any other value now reaches the error callback with a short message naming the field, such as `ZeroBounce returned "yes" for free_email, which is not a boolean.`
+
+### Fixed
+
+- In an app minified with R8 or ProGuard, every response field without `@SerializedName`, such as `ZBValidateResponse.address`, `status` and `domain`, decoded as `null`, `false` or `0`, because minification renamed the fields Gson matches by name. The AAR now ships consumer rules (`consumer-rules.pro`, through `consumerProguardFiles`) that keep the response models, `DomainFormat` and `ZBValidateBatchData` intact. Checked by running R8 9.2.1 (the version AGP 9.2.1 bundles) over the SDK classes and decoding a validate response with the SDK's Gson settings: without the rules `address`, `status` and `domain` came back `null`; with them every field decoded.
+- `getFile`, `scoringGetFile`, `emailFinderGetFile` and `domainSearchGetFile` saved a JSON error body whose only message was under `Error`, `Message` or `detail` as the results file when it did not come as `application/json`, and handed it to the response callback. Those bodies are now errors with the HTTP status, whatever the content type, and no file is written. A body that is a JSON object with a `success` field, or with an `error`, `message`, `error_message`, `Error`, `Message` or `detail` field, is an error, as in the C++ and Rust SDKs; a CSV is saved as before. An error body with no message, `{"success": false}`, now carries one instead of an empty error list (from all four calls, on an HTTP 200 or 400).
+
 ## [2.3.0] - 2026-11-11
+
+### Breaking
+
+The details are under Changed and Fixed below.
+
+#### Upgrading from 2.2
+
+- Errors you used to receive as successes now arrive in the error callback: an invalid or drained API key (HTTP 200 with an error body), `{"success": false}`, an empty or non-JSON body, an HTML page, and a `validateBatch` account-level failure (error for address `all`). Move that handling from the response callback to the error callback. `getCredits` still returns `-1` for an invalid key.
+- Recompile if you construct or destructure `ZBValidateResponse`, `ZBGetApiUsageResponse` or `ErrorResponse` positionally, or call their `copy`: new constructor parameters were inserted. Named arguments and property access are unaffected.
+- A Kotlin `when` over `ZBValidateSubStatus` with no `else` branch needs a branch for `AI_AGENT_MAILBOX`.
+- Redirects are no longer followed; a 3xx reaches the error callback with its status.
+- A blank API key, email or file id is rejected through the error callback before a request is sent.
 
 ### Added
 
@@ -130,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.1.1...v2.1.2
 [2.0.17]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.0...v2.0.17
 [1.5.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.5.0...v1.5.1
-[1.2.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.2.0...v1.2.1
+[1.2.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.6...v1.2.1
 [1.1.5]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.4...v1.1.5
 [1.1.3]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.1...v1.1.2
