@@ -56,6 +56,11 @@ object ZeroBounceSDK {
         get() = state().apiKey
         set(value) { state().apiKey = value }
 
+    /** Why the key given to [initialize] was refused, or null when it was accepted. */
+    private var apiKeyProblem: String?
+        get() = state().apiKeyProblem
+        set(value) { state().apiKeyProblem = value }
+
     internal var client: OkHttpClient
         get() = state().client
         set(value) { state().client = value }
@@ -108,6 +113,8 @@ object ZeroBounceSDK {
     private val gson = GsonBuilder()
         .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
         .registerTypeAdapter(Date::class.java, GsonDateDeserializer())
+        .registerTypeAdapter(Boolean::class.javaObjectType, StrictBooleanAdapter)
+        .registerTypeAdapter(Boolean::class.java, StrictBooleanAdapter)
         .create()
 
     private inline fun <reified T : JSONConvertable> String.toObject(): T? =
@@ -130,7 +137,17 @@ object ZeroBounceSDK {
             .followSslRedirects(false)
         transportInterceptor?.let { builder.addInterceptor(it) }
         client = builder.build()
-        this.apiKey = apiKey
+        // A key with surrounding whitespace or control characters (one read
+        // from a file with its newline, say) is not stored, so it is never sent
+        // or quoted, unredacted, in a transport error; every call reports why,
+        // as ZeroBounceWarmup does. An empty key is still "not initialized".
+        if (apiKey.isNotBlank() && (apiKey != apiKey.trim() || apiKey.any { it.isISOControl() })) {
+            this.apiKey = null
+            apiKeyProblem = "api_key has surrounding whitespace or control characters"
+        } else {
+            this.apiKey = apiKey
+            apiKeyProblem = null
+        }
         apiBaseUrl?.let {
             require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
             this.apiBaseUrl = it.trimEnd('/')
@@ -159,21 +176,30 @@ object ZeroBounceSDK {
         return body
     }
 
-    private inline fun acceptJson(
+    /**
+     * Hands a JSON response to the caller. Only [parse] runs inside the try: a
+     * body the SDK cannot decode reaches [errorCallback], while an exception
+     * thrown by the caller's own callback, called from [deliver], propagates
+     * instead of being reported as if the request had failed.
+     */
+    private inline fun <R> acceptJson(
         statusCode: Int,
         body: String?,
         errorCallback: (ErrorResponse?) -> Unit,
-        parse: (String) -> Unit,
+        parse: (String) -> R,
+        deliver: (R) -> Unit,
     ) {
         if (!jsonIsUsable(statusCode, body)) {
             errorCallback(httpError(statusCode, body))
             return
         }
-        try {
+        val parsed = try {
             parse(body!!.trim())
-        } catch (_: Throwable) {
-            errorCallback(httpError(statusCode, body))
+        } catch (e: Exception) {
+            errorCallback(parseFailure(statusCode, body, e))
+            return
         }
+        deliver(parsed)
     }
 
     private fun accountLevelBatchError(response: ZBValidateBatchResponse?): String? {
@@ -815,8 +841,8 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<ZBSendFileResponse>())
+                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                    responseCallback(it)
                 }
             }
 
@@ -883,8 +909,8 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
                 if (logEnabled) Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<ZBSendFileResponse>())
+                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                    responseCallback(it)
                 }
             }
 
@@ -1069,15 +1095,17 @@ object ZeroBounceSDK {
                     // used, so the file stays inside the app's files directory.
                     val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
                     val file = File(context.getExternalFilesDir(null), name)
-                    try {
-                        val error = saveDownload(it, file)
-                        if (error != null) {
-                            errorCallback(error)
-                        } else {
-                            responseCallback(ZBGetFileResponse(file.path))
-                        }
+                    // Only the download is inside the try, so an exception from
+                    // the caller's own callback propagates.
+                    val error = try {
+                        saveDownload(it, file)
                     } catch (e: IOException) {
-                        errorCallback(ErrorResponse.parseError(e.message))
+                        ErrorResponse.parseError(e.message)
+                    }
+                    if (error != null) {
+                        errorCallback(error)
+                    } else {
+                        responseCallback(ZBGetFileResponse(file.path))
                     }
                 }
             }
@@ -1745,6 +1773,10 @@ object ZeroBounceSDK {
      * @return **true** if the [apiKey] is null or **false** otherwise
      */
     private fun invalidApiKey(errorCallback: (ErrorResponse) -> Unit): Boolean {
+        apiKeyProblem?.let {
+            errorCallback(ErrorResponse.parseError(it))
+            return true
+        }
         if (apiKey.isNullOrBlank()) {
             val errorResponse = ErrorResponse.parseError(
                 "ZeroBounce SDK is not initialized. Please call ZeroBounceSDK.initialize(context, apiKey) first!"
@@ -1838,8 +1870,8 @@ object ZeroBounceSDK {
                     errorCallback(httpError(response.code, json))
                     return
                 }
-                acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<T>(), response.code)
+                acceptJson(response.code, json, errorCallback, { it.toObject<T>() }) {
+                    responseCallback(it, response.code)
                 }
             }
 
@@ -1876,8 +1908,8 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<T>())
+                acceptJson(response.code, json, errorCallback, { it.toObject<T>() }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2001,8 +2033,8 @@ object ZeroBounceSDK {
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
-                acceptJson(response.code, json, errorCallback) { text ->
-                    responseCallback(gson.fromJson(text, responseClass))
+                acceptJson(response.code, json, errorCallback, { gson.fromJson(it, responseClass) }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2026,8 +2058,8 @@ object ZeroBounceSDK {
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
-                acceptJson(response.code, json, errorCallback) { text ->
-                    responseCallback(JsonParser.parseString(text))
+                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2071,8 +2103,8 @@ object ZeroBounceSDK {
                     responseCallback(null)
                     return
                 }
-                acceptJson(response.code, json, errorCallback) { text ->
-                    responseCallback(JsonParser.parseString(text))
+                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2096,8 +2128,8 @@ object ZeroBounceSDK {
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
-                acceptJson(response.code, json, errorCallback) { text ->
-                    responseCallback(JsonParser.parseString(text))
+                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2126,8 +2158,8 @@ object ZeroBounceSDK {
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 val json = response.body?.string()
-                acceptJson(response.code, json, errorCallback) {
-                    responseCallback(it.toObject<ZBSendFileResponse>())
+                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                    responseCallback(it)
                 }
             }
 
@@ -2145,15 +2177,15 @@ object ZeroBounceSDK {
         override fun onResponse(call: Call, response: Response) {
             response.use {
                 val file = File(downloadPath)
-                try {
-                    val error = saveDownload(it, file)
-                    if (error != null) {
-                        errorCallback(error)
-                    } else {
-                        responseCallback(ZBGetFileResponse(file.path))
-                    }
+                val error = try {
+                    saveDownload(it, file)
                 } catch (e: IOException) {
-                    errorCallback(ErrorResponse.parseError(e.message))
+                    ErrorResponse.parseError(e.message)
+                }
+                if (error != null) {
+                    errorCallback(error)
+                } else {
+                    responseCallback(ZBGetFileResponse(file.path))
                 }
             }
         }
@@ -2166,6 +2198,7 @@ object ZeroBounceSDK {
 
 internal class SdkState {
     var apiKey: String? = null
+    var apiKeyProblem: String? = null
     lateinit var client: OkHttpClient
     var transportInterceptor: Interceptor? = null
     var apiBaseUrl = "https://api.zerobounce.net/v2"

@@ -646,19 +646,31 @@ internal class Priority3Api {
     }
 
     companion object {
+        /**
+         * Whether a download body is a JSON error rather than a results file,
+         * whatever its content type: a JSON object with a "success" field, or
+         * with an error, message, error_message, Error, Message or detail
+         * field. The C++ and Rust SDKs test "success", "message", "error" and
+         * "error_message" the same way; the capitalised keys and "detail" are
+         * added. A CSV never parses as a JSON object, so a results file is not
+         * mistaken for one.
+         */
         internal fun looksLikeJsonError(bodyStr: String): Boolean {
             val trimmed = bodyStr.trim()
             if (!trimmed.startsWith("{")) return false
             return try {
-                val obj = JsonParser.parseString(trimmed).asJsonObject
-                if (obj.has("success") && obj.get("success").isJsonPrimitive && !obj.get("success").asBoolean) {
-                    true
-                } else {
-                    obj.has("message") || obj.has("error") || obj.has("error_message")
+                val parsed = JsonParser.parseString(trimmed)
+                if (!parsed.isJsonObject) return false
+                val obj = parsed.asJsonObject
+                obj.has("success") || DOWNLOAD_ERROR_KEYS.any { key ->
+                    obj.get(key)?.isJsonNull == false
                 }
             } catch (_: Exception) {
                 false
             }
         }
+
+        private val DOWNLOAD_ERROR_KEYS =
+            listOf("error", "message", "error_message", "Error", "Message", "detail")
     }
 }

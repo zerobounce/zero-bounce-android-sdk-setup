@@ -1,2 +1,4 @@
-<manifest />
-
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Every SDK call goes over the network. Merged into the app's manifest. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
