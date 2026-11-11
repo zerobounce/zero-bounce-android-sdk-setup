@@ -1,0 +1,10 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // The SDK's own AGP version, passed in by ci/check_min_sdk_consumer.sh.
+        classpath "com.android.tools.build:gradle:${providers.gradleProperty('agpVersion').get()}"
+    }
+}

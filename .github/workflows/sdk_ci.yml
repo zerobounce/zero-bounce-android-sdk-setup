@@ -16,6 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # AGP 9 needs JDK 17 or newer. Pin 17, the SDK's jvmTarget, rather than
+      # whatever JDK the runner image defaults to.
+      - name: Set up JDK 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          java-version: 17
+          distribution: 'temurin'
 
       # Execute unit tests.
       - name: Run unit tests
@@ -24,3 +34,9 @@ jobs:
       # Build a debug version to test that the sdk compiles.
       - name: Generate release build
         run: ./gradlew :zero_bounce_sdk:assembleDebug
+
+      # The SDK declares a minSdk, but a runtime dependency with a higher one breaks
+      # manifest merging for apps at that floor (appcompat 1.8.0 did, at 23). Stage the
+      # publication and build a minimal app at the published minSdk against it.
+      - name: Build a consumer app at the SDK's minSdk
+        run: ci/check_min_sdk_consumer.sh

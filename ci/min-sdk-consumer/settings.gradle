@@ -1,0 +1,18 @@
+// A minimal app that depends on the staged SDK publication, the way a user's
+// app depends on it from Maven Central. Run it through ci/check_min_sdk_consumer.sh.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
+    repositories {
+        maven { url = uri(providers.gradleProperty('zbRepo').get()) }
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'min-sdk-consumer'
+include ':app'
