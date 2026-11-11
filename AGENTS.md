@@ -22,7 +22,7 @@ Guidance for AI coding agents working in this repository.
 ./gradlew :zero_bounce_sdk:assembleDebug
 ```
 
-The Kotlin compile inside `testDebugUnitTest` is the typecheck. CI (`.github/workflows/sdk_ci.yml`) runs those two tasks. There is no separate lint step that CI runs.
+The Kotlin compile inside `testDebugUnitTest` is the typecheck. CI (`.github/workflows/sdk_ci.yml`) runs those two tasks on JDK 17, then `ci/check_min_sdk_consumer.sh`, which stages the release publication and builds `ci/min-sdk-consumer` at the minSdk the AAR declares; a dependency with a higher minSdk fails that build. There is no separate lint step that CI runs.
 
 The live API suite is excluded from the default test task unless `-PzbLive` is
 passed, so neither `testDebugUnitTest` nor CI runs it:

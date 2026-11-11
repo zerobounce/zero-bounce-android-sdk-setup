@@ -1,0 +1,9 @@
+// CI only: lets the release publication be staged without signing keys, so a
+// pull request can build a consumer against the artifacts users would get.
+// The real release (publish.yml, centralBundle) does not use this file and
+// still signs everything.
+allprojects {
+    plugins.withId('signing') {
+        afterEvaluate { signing.required = false }
+    }
+}
