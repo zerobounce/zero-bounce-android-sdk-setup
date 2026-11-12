@@ -339,7 +339,11 @@ object ZeroBounceSDK {
             responseCallback = { parsed, statusCode ->
                 val accountMessage = accountLevelBatchError(parsed)
                 if (accountMessage != null) {
-                    errorCallback(ErrorResponse(errors = arrayListOf(accountMessage), statusCode = statusCode))
+                    // The message comes from the body, so it can quote the key.
+                    errorCallback(
+                        ErrorResponse(errors = arrayListOf(accountMessage), statusCode = statusCode)
+                            .redacted(listOf(apiKey)),
+                    )
                 } else {
                     responseCallback(parsed)
                 }
@@ -840,12 +844,13 @@ object ZeroBounceSDK {
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
@@ -911,9 +916,10 @@ object ZeroBounceSDK {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
                 if (logEnabled) Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
@@ -1091,6 +1097,7 @@ object ZeroBounceSDK {
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
+                val onError = redacting(call) { errorCallback(it) }
                 response.use {
                     val fileName =
                         it.headers["content-disposition"]?.substringAfter("filename=")
@@ -1107,7 +1114,7 @@ object ZeroBounceSDK {
                         transportError(call, e)
                     }
                     if (error != null) {
-                        errorCallback(error)
+                        onError(error)
                     } else {
                         responseCallback(ZBGetFileResponse(file.path))
                     }
@@ -1861,6 +1868,18 @@ object ZeroBounceSDK {
     }
 
     /**
+     * [errorCallback], with the keys [call] carries redacted from every message
+     * it is given. An error body can quote the request back, and with it the
+     * key: a 400 "Bad request: https://...?api_key=..." or
+     * {"error": "Invalid API key ..."}. Every response handler reports through
+     * this, so every error built from a body goes through it.
+     */
+    internal fun redacting(call: Call, errorCallback: (ErrorResponse?) -> Unit): (ErrorResponse?) -> Unit {
+        val keys = requestKeys(call.request())
+        return { error -> errorCallback(error?.redacted(keys)) }
+    }
+
+    /**
      * Reads a response body. A body cut short (fewer bytes than its
      * Content-Length, or a connection closed mid-body) throws here, inside
      * OkHttp's onResponse, where OkHttp would only log it and neither callback
@@ -1929,17 +1948,18 @@ object ZeroBounceSDK {
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
                 // The email finder and domain search: see messageOnlyBody.
                 if (messageOnlyIsFailure && json != null && response.code <= 299 && messageOnlyBody(json)) {
-                    errorCallback(httpError(response.code, json))
+                    onError(httpError(response.code, json))
                     return
                 }
-                acceptJson(response.code, json, errorCallback, { it.toObject<T>() }) {
+                acceptJson(response.code, json, onError, { it.toObject<T>() }) {
                     responseCallback(it, response.code)
                 }
             }
@@ -1972,12 +1992,13 @@ object ZeroBounceSDK {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, errorCallback, { it.toObject<T>() }) {
+                acceptJson(response.code, json, onError, { it.toObject<T>() }) {
                     responseCallback(it)
                 }
             }
@@ -2101,8 +2122,9 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
-                acceptJson(response.code, json, errorCallback, { gson.fromJson(it, responseClass) }) {
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
+                acceptJson(response.code, json, onError, { gson.fromJson(it, responseClass) }) {
                     responseCallback(it)
                 }
             }
@@ -2126,8 +2148,9 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
-                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
+                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2164,7 +2187,8 @@ object ZeroBounceSDK {
         }
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
                 // LIVE: DELETE /test/{id} answers 204 No Content with an empty
                 // body. That is the success, so it must not reach acceptJson,
                 // which reports any empty body as an error.
@@ -2172,7 +2196,7 @@ object ZeroBounceSDK {
                     responseCallback(null)
                     return
                 }
-                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2196,8 +2220,9 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).post(formBuilder.build()).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
-                acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
+                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2226,8 +2251,9 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).post(body).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = readBody(call, response) { errorCallback(it) } ?: return
-                acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
+                val onError = redacting(call) { errorCallback(it) }
+                val json = readBody(call, response) { onError(it) } ?: return
+                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
@@ -2244,6 +2270,7 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ): Callback = object : Callback {
         override fun onResponse(call: Call, response: Response) {
+            val onError = redacting(call) { errorCallback(it) }
             response.use {
                 val file = File(downloadPath)
                 val error = try {
@@ -2252,7 +2279,7 @@ object ZeroBounceSDK {
                     transportError(call, e)
                 }
                 if (error != null) {
-                    errorCallback(error)
+                    onError(error)
                 } else {
                     responseCallback(ZBGetFileResponse(file.path))
                 }
