@@ -129,6 +129,13 @@ object ZeroBounceSDK {
      * `https://api-eu.zerobounce.net/v2` both send `validate` to `.../v2/validate`.
      */
     fun initialize(apiKey: String, apiBaseUrl: String? = null) {
+        // All or nothing: the base URL is checked before anything is stored,
+        // so a call that throws leaves the key, the client and the base URL as
+        // they were, and a caller that catches the error cannot go on with a
+        // new key on the old URL.
+        apiBaseUrl?.let {
+            require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
+        }
         val builder = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
@@ -148,10 +155,7 @@ object ZeroBounceSDK {
             this.apiKey = apiKey
             apiKeyProblem = null
         }
-        apiBaseUrl?.let {
-            require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
-            this.apiBaseUrl = it.trimEnd('/')
-        }
+        apiBaseUrl?.let { this.apiBaseUrl = it.trimEnd('/') }
     }
 
     internal fun isAllowedApiBaseUrl(url: String): Boolean {
@@ -836,7 +840,7 @@ object ZeroBounceSDK {
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
@@ -853,7 +857,7 @@ object ZeroBounceSDK {
                         "sendFile error=$e}"
                     )
                 }
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
 
@@ -907,7 +911,7 @@ object ZeroBounceSDK {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 if (logEnabled) Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
@@ -916,7 +920,7 @@ object ZeroBounceSDK {
 
             override fun onFailure(call: Call, e: IOException) {
                 if (logEnabled) Log.d("ZeroBounceSDK", "sendFile error=$e")
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -1100,7 +1104,7 @@ object ZeroBounceSDK {
                     val error = try {
                         saveDownload(it, file)
                     } catch (e: IOException) {
-                        ErrorResponse.parseError(e.message)
+                        transportError(call, e)
                     }
                     if (error != null) {
                         errorCallback(error)
@@ -1111,7 +1115,7 @@ object ZeroBounceSDK {
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -1808,6 +1812,71 @@ object ZeroBounceSDK {
     }
 
     /**
+     * The API key a request carries: in its query, its Bearer header (the Inbox
+     * Placement Tester), an `api_key` form or multipart field, or a JSON body. Read from the
+     * request itself, because a callback runs on OkHttp's thread, outside the
+     * [ZeroBounceClient] whose key it was.
+     */
+    private fun requestKeys(request: Request): List<String> {
+        val keys = mutableListOf<String>()
+        request.url.queryParameterValues("api_key").filterNotNullTo(keys)
+        request.header("Authorization")?.removePrefix("Bearer ")?.let { keys.add(it) }
+        when (val body = request.body) {
+            is FormBody -> for (i in 0 until body.size) {
+                if (body.name(i) == "api_key") keys.add(body.value(i))
+            }
+            is MultipartBody -> for (part in body.parts) {
+                val disposition = part.headers?.get("Content-Disposition").orEmpty()
+                if (disposition.contains("name=\"api_key\"")) {
+                    val buffer = okio.Buffer()
+                    part.body.writeTo(buffer)
+                    keys.add(buffer.readUtf8())
+                }
+            }
+            null -> Unit
+            else -> if (body.contentType()?.subtype == "json" && body.contentLength() in 0..65_536) {
+                // validatebatch sends the key in its JSON body.
+                runCatching {
+                    val buffer = okio.Buffer()
+                    body.writeTo(buffer)
+                    val value = JsonParser.parseString(buffer.readUtf8()).asJsonObject.get("api_key")
+                    if (value != null && value.isJsonPrimitive) keys.add(value.asString)
+                }
+            }
+        }
+        return keys.filter { it.isNotEmpty() }
+    }
+
+    /**
+     * A transport failure: a refused or dropped connection, a timeout, or a
+     * body cut short. It carries status 0, and the key is redacted from the
+     * platform's message, which can quote the request URL.
+     */
+    internal fun transportError(call: Call, e: IOException): ErrorResponse {
+        var message = redactSecret(e.message ?: e.javaClass.simpleName)
+        for (key in requestKeys(call.request())) {
+            message = message.replace(key, "***").replace(encQuery(key), "***")
+        }
+        return ErrorResponse(errors = arrayListOf(message))
+    }
+
+    /**
+     * Reads a response body. A body cut short (fewer bytes than its
+     * Content-Length, or a connection closed mid-body) throws here, inside
+     * OkHttp's onResponse, where OkHttp would only log it and neither callback
+     * would run; it goes to [errorCallback] as a transport failure instead.
+     *
+     * @return the body, or null when the read failed and was reported
+     */
+    internal fun readBody(call: Call, response: Response, errorCallback: (ErrorResponse?) -> Unit): String? =
+        try {
+            response.body.string()
+        } catch (e: IOException) {
+            errorCallback(transportError(call, e))
+            null
+        }
+
+    /**
      * The helper method that handles any type of request.
      *
      * @param url the url
@@ -1860,7 +1929,7 @@ object ZeroBounceSDK {
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
@@ -1876,7 +1945,7 @@ object ZeroBounceSDK {
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -1903,7 +1972,7 @@ object ZeroBounceSDK {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 if (logEnabled) {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
@@ -1914,7 +1983,7 @@ object ZeroBounceSDK {
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2032,14 +2101,14 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 acceptJson(response.code, json, errorCallback, { gson.fromJson(it, responseClass) }) {
                     responseCallback(it)
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2057,14 +2126,14 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2095,7 +2164,7 @@ object ZeroBounceSDK {
         }
         client.newCall(builder.build()).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 // LIVE: DELETE /test/{id} answers 204 No Content with an empty
                 // body. That is the success, so it must not reach acceptJson,
                 // which reports any empty body as an error.
@@ -2109,7 +2178,7 @@ object ZeroBounceSDK {
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2127,14 +2196,14 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).post(formBuilder.build()).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 acceptJson(response.code, json, errorCallback, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2157,14 +2226,14 @@ object ZeroBounceSDK {
         val request = Request.Builder().url(url).post(body).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val json = response.body?.string()
+                val json = readBody(call, response) { errorCallback(it) } ?: return
                 acceptJson(response.code, json, errorCallback, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                errorCallback(ErrorResponse.parseError(e.message))
+                errorCallback(transportError(call, e))
             }
         })
     }
@@ -2180,7 +2249,7 @@ object ZeroBounceSDK {
                 val error = try {
                     saveDownload(it, file)
                 } catch (e: IOException) {
-                    ErrorResponse.parseError(e.message)
+                    transportError(call, e)
                 }
                 if (error != null) {
                     errorCallback(error)
@@ -2191,7 +2260,7 @@ object ZeroBounceSDK {
         }
 
         override fun onFailure(call: Call, e: IOException) {
-            errorCallback(ErrorResponse.parseError(e.message))
+            errorCallback(transportError(call, e))
         }
     }
 }
