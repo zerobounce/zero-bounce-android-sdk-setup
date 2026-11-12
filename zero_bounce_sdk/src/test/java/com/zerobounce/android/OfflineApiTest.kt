@@ -263,6 +263,39 @@ class OfflineApiTest {
         assertFalse(request.fields.containsKey("first_name_column"))
     }
 
+    /**
+     * remove_duplicate is sent only when the caller sets it, on all four bulk
+     * uploads (file and stream, validation and scoring): the API defaults it to
+     * true, so an SDK default would override the API's (R2).
+     */
+    @Test
+    fun removeDuplicateIsSentOnlyWhenSet() {
+        useSharedKey("dedupe-key")
+        val uploads: List<((ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit> = listOf(
+            { ok, err ->
+                ZeroBounceSDK.sendFile(context = context, file = csvFile, emailAddressColumnIndex = 1,
+                    responseCallback = ok, errorCallback = err)
+            },
+            { ok, err ->
+                ZeroBounceSDK.sendFile(inputStream = ByteArrayInputStream("a@example.com\n".toByteArray()),
+                    fileName = "people.csv", emailAddressColumnIndex = 1, responseCallback = ok, errorCallback = err)
+            },
+            { ok, err ->
+                ZeroBounceSDK.scoringSendFile(context = context, file = csvFile, emailAddressColumnIndex = 1,
+                    responseCallback = ok, errorCallback = err)
+            },
+            { ok, err ->
+                ZeroBounceSDK.scoringSendFile(inputStream = ByteArrayInputStream("a@example.com\n".toByteArray()),
+                    fileName = "people.csv", emailAddressColumnIndex = 1, responseCallback = ok, errorCallback = err)
+            },
+        )
+        for ((index, upload) in uploads.withIndex()) {
+            await<ZBSendFileResponse> { ok, err -> upload(ok, err) }
+            val request = onlyRequest()
+            assertFalse("upload $index sent ${request.fields}", request.fields.containsKey("remove_duplicate"))
+        }
+    }
+
     @Test
     fun scoringSendFileFromDiskUsesScoringHost() {
         useSharedKey("score-disk")

@@ -1860,9 +1860,12 @@ object ZeroBounceSDK {
      * platform's message, which can quote the request URL.
      */
     internal fun transportError(call: Call, e: IOException): ErrorResponse {
-        var message = redactSecret(e.message ?: e.javaClass.simpleName)
-        for (key in requestKeys(call.request())) {
-            message = message.replace(key, "***").replace(encQuery(key), "***")
+        val keys = requestKeys(call.request())
+        // Every spelling of the key (raw, URL-encoded, JSON-escaped), then the
+        // form OkHttp writes it in a query.
+        var message = redactSecrets(redactSecret(e.message ?: e.javaClass.simpleName), keys)
+        for (key in keys) {
+            message = message.replace(encQuery(key), "***")
         }
         return ErrorResponse(errors = arrayListOf(message))
     }

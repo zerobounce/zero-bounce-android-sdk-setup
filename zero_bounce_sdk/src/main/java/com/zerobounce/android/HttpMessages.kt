@@ -1,6 +1,7 @@
 package com.zerobounce.android
 
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import okhttp3.Response
 import java.io.File
@@ -33,13 +34,28 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
     var value = text
     for (secret in secrets) {
         if (secret.isNullOrEmpty()) continue
-        val encoded = URLEncoder.encode(secret, "UTF-8")
-        val json = Gson().toJson(secret).let { it.substring(1, it.length - 1) }
-        for (form in listOf(secret, encoded, encoded.replace("+", "%20"), json)) {
+        for (form in secretForms(secret)) {
             value = value.replace(form, "***")
         }
     }
     return value
+}
+
+/**
+ * The spellings of [secret] a server can quote back: as is, URL-encoded (`+` or
+ * `%20` for a space) and JSON-escaped, with or without Gson's HTML-safe escapes and
+ * with `/` written as a backslash and a slash (PHP's json_encode). Longest first,
+ * so a shorter form never leaves part of a longer one behind.
+ */
+private fun secretForms(secret: String): List<String> {
+    val encoded = URLEncoder.encode(secret, "UTF-8")
+    val forms = linkedSetOf(secret, encoded, encoded.replace("+", "%20"))
+    for (gson in listOf(Gson(), GsonBuilder().disableHtmlEscaping().create())) {
+        val json = gson.toJson(secret).let { it.substring(1, it.length - 1) }
+        forms.add(json)
+        forms.add(json.replace("/", "\\/"))
+    }
+    return forms.sortedByDescending { it.length }
 }
 
 /** This error with each of [secrets] redacted from its messages. */
@@ -239,13 +255,24 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     return null
 }
 
+/**
+ * Writes a download to a temporary file next to [file] and moves it over [file]
+ * only once it is complete, so a download that fails part-way leaves whatever
+ * was at [file] untouched, and no partial file behind (D4).
+ */
 private fun writeDownload(file: File, write: (FileOutputStream) -> Unit) {
-    file.parentFile?.mkdirs()
+    val dir = file.absoluteFile.parentFile
+    dir?.mkdirs()
+    val temp = File.createTempFile(".${file.name}.", ".part", dir)
     try {
-        FileOutputStream(file).use(write)
-    } catch (e: IOException) {
-        file.delete()
-        throw e
+        FileOutputStream(temp).use(write)
+        // rename replaces an existing file on Android (POSIX); a platform that
+        // will not rename over a file gets the old one removed first.
+        if (!temp.renameTo(file) && !(file.delete() && temp.renameTo(file))) {
+            throw IOException("Could not save the download as ${file.name}")
+        }
+    } finally {
+        temp.delete()
     }
 }
 

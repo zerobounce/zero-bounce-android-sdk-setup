@@ -26,7 +26,11 @@ internal class RequestSweep(private val context: Context, private val dir: File,
     /** The download path handed to the most recent call, or null. */
     var lastOut: String? = null
 
-    private fun out(): String = File(dir, "out-${files.incrementAndGet()}.csv").path.also { lastOut = it }
+    /** Called with each download path before the call is made, to put a file there first. */
+    var onOut: (File) -> Unit = {}
+
+    private fun out(): String = File(dir, "out-${files.incrementAndGet()}.csv").also { onOut(it) }.path
+        .also { lastOut = it }
 
     private fun stream() = ByteArrayInputStream("email\na@example.com\n".toByteArray())
 
@@ -145,7 +149,7 @@ internal class RequestSweep(private val context: Context, private val dir: File,
             "checkDomainDmarc(String)" to { arrayOf(from) },
             "checkDomainDmarc(String,String)" to { arrayOf(from, null) },
             "testSmtpConfiguration(String,String,String,String,int)" to
-                { arrayOf(from, "smtp-user", "smtp-pass", "smtp.example.com", 587) },
+                { arrayOf(from, "smtp-user", SMTP_PASSWORD, "smtp.example.com", 587) },
         )
     }
 
@@ -209,6 +213,9 @@ internal class RequestSweep(private val context: Context, private val dir: File,
     }
 
     companion object {
+        /** The SMTP password the sweep sends, with a quote and a slash, which JSON escaping changes. */
+        const val SMTP_PASSWORD = "smtp\"pa/ss"
+
         fun isCallback(type: Class<*>) = type == Function1::class.java
 
         /** The public request methods of [type]: public instance methods that take a callback. */

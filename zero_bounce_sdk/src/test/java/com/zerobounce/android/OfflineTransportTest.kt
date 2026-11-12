@@ -65,9 +65,11 @@ class OfflineTransportTest {
     private fun sweep(
         interceptor: Interceptor,
         seconds: Long = 10,
+        onOut: (File) -> Unit = {},
         check: (Method, RequestSweep.Outcome, MutableList<String>) -> Unit,
     ) {
         val sweep = RequestSweep(context, dir, csv)
+        sweep.onOut = onOut
         val client = ZeroBounceClient()
         client.transportInterceptor = interceptor
         client.initialize(key)
@@ -142,6 +144,82 @@ class OfflineTransportTest {
     }
 
     /**
+     * A download that fails part-way never touches a file already at its target:
+     * the getfile paths that write into the app's files directory and those
+     * given a path each find yesterday's results there, get a 200 that closes
+     * before its Content-Length, and must leave those results as they were. The
+     * body is written to a temporary file and moved over the target only once
+     * it is complete (D4).
+     */
+    @Test
+    fun aFailedDownloadKeepsTheFileAlreadyAtItsTarget() {
+        val old = "OLD RESULTS"
+        val csvBody = ("email,status\n" + "a@example.com,valid\n".repeat(1000)).toByteArray()
+        val csv = LoopbackServer.cutShort("text/csv", csvBody, csvBody.size + 1000)
+        val json = LoopbackServer.answer(200, "application/json", "{}".toByteArray())
+        // The getfile calls that take a Context write <files dir>/fid.csv.
+        val inFilesDir = File(dir, "fid.csv").apply { writeText(old) }
+        var checked = 0
+        LoopbackServer { request, out ->
+            val target = request.target.lowercase()
+            (if (target.contains("getfile") || target.contains("download")) csv else json)(request, out)
+        }.use { server ->
+            sweep(server.reroute, onOut = { it.writeText(old) }) { method, outcome, failures ->
+                if (!isDownload(method)) return@sweep
+                if (outcome.successes.isNotEmpty() || outcome.errors.size != 1) failures.add(outcome.toString())
+                val target = outcome.out?.let { File(it) } ?: inFilesDir
+                val left = if (target.exists()) target.readText() else "(deleted)"
+                if (left != old) failures.add("${outcome.signature} left ${left.take(30)} at ${target.name}")
+                checked++
+                inFilesDir.writeText(old)
+                dir.listFiles().orEmpty().filter { it.name.endsWith(".part") }
+                    .forEach { failures.add("${outcome.signature} left a temporary file ${it.name}") }
+            }
+        }
+        assertTrue("downloads checked: $checked", checked >= 6)
+    }
+
+    /**
+     * Every download, Warmup's CSV downloads included, refuses a 200 that is not a
+     * file: an empty body under text/csv (D3), and a JSON content type whatever
+     * the body (D1) — here a CSV-looking body that no body check would catch.
+     * Each reports one error with status 200 and writes no file.
+     */
+    @Test
+    fun everyDownloadRefusesAnEmptyBodyAndAJsonContentType() {
+        val cases = listOf(
+            "empty" to LoopbackServer.answer(200, "text/csv", ByteArray(0)),
+            "json-type" to LoopbackServer.answer(200, "application/json",
+                "email,status\na@example.com,valid\n".toByteArray()),
+        )
+        for ((label, download) in cases) {
+            var checked = 0
+            val json = LoopbackServer.answer(200, "application/json", "{}".toByteArray())
+            LoopbackServer { request, out ->
+                val target = request.target.lowercase()
+                (if (target.contains("getfile") || target.contains("download")) download else json)(request, out)
+            }.use { server ->
+                sweep(server.reroute) { method, outcome, failures ->
+                    if (!isDownload(method)) return@sweep
+                    checked++
+                    if (outcome.successes.isNotEmpty() || outcome.errors.size != 1 ||
+                        outcome.errors[0]?.statusCode != 200
+                    ) {
+                        failures.add("$label $outcome")
+                    }
+                    val written = outcome.out?.let { listOf(File(it)) }
+                        ?: dir.listFiles().orEmpty().filter { it.name != "in.csv" }
+                    written.filter { it.exists() }.forEach {
+                        failures.add("$label ${outcome.signature} wrote ${it.name}")
+                        it.delete()
+                    }
+                }
+            }
+            assertTrue("$label downloads checked: $checked", checked >= 6)
+        }
+    }
+
+    /**
      * Every path refuses each redirect status with a Location header: the
      * error callback gets the 3xx status and nothing reaches the Location.
      */
@@ -168,8 +246,9 @@ class OfflineTransportTest {
     }
 
     /**
-     * Every request goes out on a client with non-zero connect, read and write
-     * timeouts that follows no redirect, plain or between http and https.
+     * Every request goes out on a client with the default timeouts (connect
+     * 30 s, read and write 120 s) that follows no redirect, plain or between
+     * http and https.
      */
     @Test
     fun everyRequestPathHasTimeoutsAndNoRedirects() {
@@ -203,7 +282,9 @@ class OfflineTransportTest {
             consumed = seen.size
             if (mine.isEmpty()) failures.add("${outcome.signature} sent no request")
             for (request in mine) {
-                if (request.connectMs <= 0 || request.readMs <= 0 || request.writeMs <= 0) {
+                // The documented defaults, exactly: OkHttp's own 10 s would pass a
+                // non-zero check, so a dropped or changed setting must fail (T2).
+                if (request.connectMs != 30_000 || request.readMs != 120_000 || request.writeMs != 120_000) {
                     failures.add("${outcome.signature}: connect ${request.connectMs} ms, read ${request.readMs} ms, write ${request.writeMs} ms")
                 }
                 if (request.followRedirects || request.followSslRedirects) {

@@ -48,7 +48,12 @@ internal object StrictBooleanAdapter : TypeAdapter<Boolean?>() {
 
     private fun invalid(path: String, value: String): StrictBooleanException {
         val field = path.removePrefix("$.")
-        val shown = if (value.length > 40) value.take(40) + "..." else value
+        // Cut at a code point, so a surrogate pair is never split (P3).
+        val shown = if (value.codePointCount(0, value.length) > 40) {
+            value.substring(0, value.offsetByCodePoints(0, 40)) + "..."
+        } else {
+            value
+        }
         return StrictBooleanException("ZeroBounce returned $shown for $field, which is not a boolean.")
     }
 }

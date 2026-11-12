@@ -15,6 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import okio.buffer
 import java.io.File
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -33,11 +34,14 @@ class OfflineRedactionSweepTest {
     private lateinit var dir: File
     private lateinit var csv: File
 
-    /** A key with characters that URL encoding changes, so the encoded form differs. */
-    private val key = "echo+key/1234567890"
+    /**
+     * A key with characters that URL encoding and JSON escaping change (`+`, `/`,
+     * `"` and `%`), so neither form equals the key as sent.
+     */
+    private val key = "echo+key/12\"34%567890"
 
     /** The SMTP password the Warmup sweep sends to testSmtpConfiguration. */
-    private val password = "smtp-pass"
+    private val password = RequestSweep.SMTP_PASSWORD
 
     @Before
     fun setUp() {
@@ -67,8 +71,16 @@ class OfflineRedactionSweepTest {
 
     private fun json(text: String): String = Gson().toJson(text)
 
+    /** [json] as PHP's json_encode writes it: every `/` as a backslash and a slash. */
+    private fun phpJson(text: String): String = json(text).replace("/", "\\/")
+
+    /** The secret JSON-escaped, as Gson and as PHP write it, without the quotes. */
+    private fun jsonForms(secret: String): List<String> =
+        listOf(json(secret), phpJson(secret)).map { it.substring(1, it.length - 1) }
+
     private fun leaks(text: String, secret: String): Boolean {
         if (text.contains(secret) || text.contains(URLEncoder.encode(secret, "UTF-8"))) return true
+        if (jsonForms(secret).any { text.contains(it) }) return true
         return try {
             URLDecoder.decode(text, "UTF-8").contains(secret)
         } catch (_: IllegalArgumentException) {
@@ -138,6 +150,62 @@ class OfflineRedactionSweepTest {
     fun aJsonErrorQuotingTheRequestNeverCarriesTheKey() {
         sweep("400-json", answering(400, "application/json") {
             "{\"success\": false, \"message\": ${json("Invalid API key $key")}, \"detail\": ${json(echo(it))}}"
+        }, everyCallFails = true)
+    }
+
+    /**
+     * A 400 JSON error written by a server that escapes `/` as a backslash and a
+     * slash (PHP's json_encode), quoting the key and the request.
+     */
+    @Test
+    fun aJsonErrorWithEscapedSlashesNeverCarriesTheKey() {
+        sweep("400-php-json", answering(400, "application/json") {
+            "{\"error\": ${phpJson("Invalid API key $key for ${echo(it)}")}}"
+        }, everyCallFails = true)
+    }
+
+    /**
+     * A transport error whose message quotes the key and the SMTP password as sent,
+     * URL-encoded and JSON-escaped (Gson's and PHP's spelling) never carries them,
+     * on any path (S4, S7).
+     */
+    @Test
+    fun aTransportErrorQuotingEverySpellingNeverCarriesASecret() {
+        sweep("transport", Interceptor { chain ->
+            throw java.io.IOException("failed to connect to ${chain.request().url}: ${spellings(chain.request())}")
+        }, everyCallFails = true)
+    }
+
+    /**
+     * Every spelling of the key, and for testSmtpConfiguration of the SMTP
+     * password, which only Warmup holds: as sent, URL-encoded and JSON-escaped.
+     */
+    private fun spellings(request: Request): String {
+        val secrets = if (request.url.encodedPath.contains("test-smtp-configuration")) listOf(key, password) else listOf(key)
+        return secrets.joinToString(" ") { "$it ${URLEncoder.encode(it, "UTF-8")} ${json(it)} ${phpJson(it)}" }
+    }
+
+    /**
+     * A body that fails while it is being read, with an error quoting every
+     * spelling of the key and the SMTP password, is a transport error on every
+     * path, Warmup included, and carries neither secret (S7).
+     */
+    @Test
+    fun aBodyReadErrorNeverCarriesASecret() {
+        sweep("read-error", Interceptor { chain ->
+            val quoted = spellings(chain.request())
+            val failing = object : okhttp3.ResponseBody() {
+                override fun contentType() = "application/json".toMediaType()
+                override fun contentLength() = -1L
+                override fun source(): okio.BufferedSource = object : okio.Source {
+                    override fun read(sink: okio.Buffer, byteCount: Long): Long =
+                        throw java.io.IOException("connection reset reading $quoted")
+                    override fun timeout() = okio.Timeout.NONE
+                    override fun close() {}
+                }.buffer()
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .header("Content-Type", "application/json").body(failing).build()
         }, everyCallFails = true)
     }
 

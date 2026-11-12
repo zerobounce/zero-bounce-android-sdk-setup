@@ -236,6 +236,27 @@ class OfflineWarmupTest {
         assertEquals(3, onlyRequest().json()!!["engagement_rule_id"].asInt)
     }
 
+    /**
+     * The exact JSON bodies of testSmtpConfiguration and changeFromAddress, so a
+     * renamed or dropped wire field fails (X3).
+     */
+    @Test
+    fun smtpAndFromAddressBodiesUseTheDocumentedFieldNames() {
+        await<JsonElement> { ok, err ->
+            warmup.testSmtpConfiguration("a@b.com", "bob", "pw", "smtp.example.com", 587, ok, err)
+        }
+        assertEquals(
+            JsonParser.parseString("""{"from_address":"a@b.com","username":"bob","password":"pw",""" +
+                """"server":"smtp.example.com","port":587}"""),
+            onlyRequest().json(),
+        )
+        await<JsonElement> { ok, err -> warmup.changeFromAddress("old@b.com", "new@b.com", ok, err) }
+        assertEquals(
+            JsonParser.parseString("""{"team_id":1,"old_from_address":"old@b.com","new_from_address":"new@b.com"}"""),
+            onlyRequest().json(),
+        )
+    }
+
     @Test
     fun updateSendingAccountChecksItsRanges() {
         await<JsonElement> { ok, err -> warmup.updateSendingAccount("a@b.com", 5, 4, true, ok, err) }
