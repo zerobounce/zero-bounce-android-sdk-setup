@@ -3,7 +3,10 @@
 # Gradle module metadata) into build/central-staging, then builds
 # ci/min-sdk-consumer, an app whose minSdk is the minSdkVersion written into the
 # published AAR. Manifest merging fails if any runtime dependency declares a
-# higher minSdk, so a dependency that silently raises the floor fails CI.
+# higher minSdk, so a dependency that silently raises the floor fails CI. The app
+# also compiles a call whose callback takes a Gson type without declaring Gson
+# itself, so a type the public API uses must come with the SDK as an api
+# (compile-scope) dependency.
 #
 # Usage: ci/check_min_sdk_consumer.sh [extra gradle args, e.g. --offline]
 set -euo pipefail
