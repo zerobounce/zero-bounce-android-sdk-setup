@@ -723,7 +723,7 @@ class ZeroBounceWarmup {
                 // where OkHttp would only log it: report it as a transport
                 // failure (status 0) instead.
                 val text = try {
-                    response.body.string()
+                    bodyText(response)
                 } catch (e: IOException) {
                     errorCallback(ErrorResponse(errors = arrayListOf(redact(e.message, secrets))))
                     return
@@ -763,7 +763,9 @@ class ZeroBounceWarmup {
         secrets: List<String> = emptyList(),
     ) {
         send(method, path, query, body, secrets, errorCallback) { statusCode, contentType, text ->
-            if (statusCode == 204 || text.isBlank()) {
+            // Only a body with nothing in it is the documented empty success; a
+            // blank one (spaces, a line break) is not JSON and is refused below.
+            if (statusCode == 204 || text.isEmpty()) {
                 responseCallback(null)
                 return@send
             }

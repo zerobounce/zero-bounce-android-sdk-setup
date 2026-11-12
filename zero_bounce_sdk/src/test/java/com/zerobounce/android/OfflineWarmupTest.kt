@@ -706,6 +706,217 @@ class OfflineWarmupTest {
         fun errorText(): String? = error?.errors?.joinToString(", ")
     }
 
+    // -- every request on the wire (X3) -----------------------------------------
+
+    /** Asserts one request's method, path, whole query and whole JSON body (null for none). */
+    private fun expectRequest(label: String, method: String, path: String, query: Map<String, String>, body: String?) {
+        val request = onlyRequest()
+        assertEquals(label, method, request.method)
+        assertEquals(label, "$root$path", request.path)
+        assertEquals(label, query, request.query)
+        if (body == null) {
+            assertTrue("$label sent a body: ${request.body}", request.body.isEmpty())
+        } else {
+            assertEquals("$label sent ${request.body}", JsonParser.parseString(body), JsonParser.parseString(request.body))
+        }
+    }
+
+    /**
+     * Every public Warmup request method, with every wire field it can send pinned:
+     * method, path, the whole query and the whole JSON body. Renaming, dropping or
+     * adding a field fails here (X3). The table is checked against the methods found
+     * by reflection, overloads included, so a new request method must be added to it.
+     */
+    @Test
+    fun everyWarmupRequestSendsExactlyTheDocumentedFields() {
+        val a = "a@b.com"
+        fun json(call: ((JsonElement?) -> Unit, (ErrorResponse?) -> Unit) -> Unit) {
+            val outcome = await<JsonElement> { ok, err -> call(ok, err) }
+            assertEquals(null, outcome.errorText())
+        }
+        fun text(call: ((String) -> Unit, (ErrorResponse?) -> Unit) -> Unit) {
+            fake.replyWith(200, "text/csv", "email\na@b.com\n")
+            val outcome = awaitText { ok, err -> call(ok, err) }
+            assertEquals(null, outcome.errorText())
+        }
+        val custom = """{"c_from":"a@b.com","reply_pct":20,"important_pct":30,"click_pct":40}"""
+        val calls = linkedMapOf<String, () -> Unit>(
+            "listSendingAccounts()" to {
+                json { ok, err -> warmup.listSendingAccounts(ok, err) }
+                expectRequest("list", "GET", "/sending-accounts", mapOf(), null)
+            },
+            "getSendingAccount(String)" to {
+                json { ok, err -> warmup.getSendingAccount(a, ok, err) }
+                expectRequest("get", "GET", "/sending-account", mapOf("from_address" to a), null)
+            },
+            "addSendingAccount(String,String)" to {
+                json { ok, err -> warmup.addSendingAccount(a, "zb_managed", responseCallback = ok, errorCallback = err) }
+                expectRequest("zb_managed bare", "POST", "/sending-accounts", mapOf(),
+                    """{"from_address":"a@b.com","onboarding_model":"zb_managed"}""")
+            },
+            "addSendingAccount(String,String,ZBWarmupAddSendingAccountOptions)" to {
+                json { ok, err ->
+                    warmup.addSendingAccount(a, "self_managed", ZBWarmupAddSendingAccountOptions(engagementRuleId = 2), ok, err)
+                }
+                // ignore_conflict is left out when the caller did not set it.
+                expectRequest("self_managed", "POST", "/sending-accounts", mapOf(),
+                    """{"from_address":"a@b.com","onboarding_model":"self_managed","engagement_rule_id":2}""")
+                json { ok, err ->
+                    warmup.addSendingAccount(a, "self_managed",
+                        ZBWarmupAddSendingAccountOptions(engagementRuleId = 4, ignoreConflict = false), ok, err)
+                }
+                expectRequest("self_managed ignore_conflict", "POST", "/sending-accounts", mapOf(),
+                    """{"from_address":"a@b.com","onboarding_model":"self_managed","engagement_rule_id":4,""" +
+                        """"ignore_conflict":false}""")
+                json { ok, err ->
+                    warmup.addSendingAccount(a, "zb_managed",
+                        ZBWarmupAddSendingAccountOptions(
+                            ignoreConflict = true,
+                            emailContent = ZBWarmupEmailContent(
+                                companyName = "Acme",
+                                companyWebsite = "https://acme.example",
+                                companyDescription = "Tools",
+                                typesOfEmails = listOf("newsletter"),
+                                exampleEmail = "Hi",
+                            ),
+                            managedSending = ZBWarmupManagedSending(
+                                weekdaysOnly = false,
+                                timezone = "Europe/Bucharest",
+                                timezoneOffsetHours = -3.5,
+                                warmupStartDate = "2026-12-01",
+                            ),
+                        ), ok, err)
+                }
+                expectRequest("zb_managed full", "POST", "/sending-accounts", mapOf(),
+                    """{"from_address":"a@b.com","onboarding_model":"zb_managed","ignore_conflict":true,""" +
+                        """"email_content":{"company_name":"Acme","company_website":"https://acme.example",""" +
+                        """"company_description":"Tools","types_of_emails":["newsletter"],"example_email":"Hi"},""" +
+                        """"managed_sending":{"weekdays_only":false,"timezone":"Europe/Bucharest",""" +
+                        """"timezone_offset":-3.5,"warmup_start_date":"2026-12-01"}}""")
+            },
+            "updateSendingAccount(String,int,int,boolean)" to {
+                json { ok, err -> warmup.updateSendingAccount(a, 2, 3, true, ok, err) }
+                expectRequest("update", "PUT", "/sending-accounts", mapOf(),
+                    """{"team_id":1,"from_address":"a@b.com","engagement_rule_id":2,"status_id":3,"auto_enable":true}""")
+            },
+            "deleteSendingAccount(String)" to {
+                json { ok, err -> warmup.deleteSendingAccount(a, ok, err) }
+                expectRequest("delete", "DELETE", "/sending-accounts", mapOf("from_address" to a), null)
+            },
+            "changeFromAddress(String,String)" to {
+                json { ok, err -> warmup.changeFromAddress("old@b.com", "new@b.com", ok, err) }
+                expectRequest("change", "PUT", "/smtp-credentials", mapOf(),
+                    """{"team_id":1,"old_from_address":"old@b.com","new_from_address":"new@b.com"}""")
+            },
+            "listFromAddresses()" to {
+                json { ok, err -> warmup.listFromAddresses(responseCallback = ok, errorCallback = err) }
+                expectRequest("from bare", "GET", "/from-addresses", mapOf(), null)
+            },
+            "listFromAddresses(String)" to {
+                json { ok, err -> warmup.listFromAddresses("acme", responseCallback = ok, errorCallback = err) }
+                expectRequest("from search", "GET", "/from-addresses", mapOf("search_from" to "acme"), null)
+            },
+            "listFromAddresses(String,Integer)" to {
+                json { ok, err -> warmup.listFromAddresses("acme", 10, responseCallback = ok, errorCallback = err) }
+                expectRequest("from offset", "GET", "/from-addresses",
+                    mapOf("search_from" to "acme", "offset" to "10"), null)
+            },
+            "listFromAddresses(String,Integer,Integer)" to {
+                json { ok, err -> warmup.listFromAddresses("acme", 10, 20, ok, err) }
+                expectRequest("from", "GET", "/from-addresses",
+                    mapOf("search_from" to "acme", "offset" to "10", "limit" to "20"), null)
+            },
+            "getEngagementRules()" to {
+                json { ok, err -> warmup.getEngagementRules(ok, err) }
+                expectRequest("rules", "GET", "/engagement-rules", mapOf(), null)
+            },
+            "setEngagementRule(String,int)" to {
+                json { ok, err -> warmup.setEngagementRule(a, 3, ok, err) }
+                expectRequest("rule", "PUT", "/engagement-rule", mapOf("c_from" to a), """{"rule_id":3}""")
+            },
+            "getCustomEngagement(String)" to {
+                json { ok, err -> warmup.getCustomEngagement(a, ok, err) }
+                expectRequest("custom get", "GET", "/custom-engagement/a%40b.com", mapOf(), null)
+            },
+            "createCustomEngagement(String,int,int,int)" to {
+                json { ok, err -> warmup.createCustomEngagement(a, 20, 30, 40, ok, err) }
+                expectRequest("custom create", "POST", "/custom-engagement", mapOf(), custom)
+            },
+            "updateCustomEngagement(String,int,int,int)" to {
+                json { ok, err -> warmup.updateCustomEngagement(a, 20, 30, 40, ok, err) }
+                expectRequest("custom update", "PUT", "/custom-engagement", mapOf(), custom)
+            },
+            "deleteCustomEngagement(String,int)" to {
+                json { ok, err -> warmup.deleteCustomEngagement(a, 2, ok, err) }
+                expectRequest("custom delete", "DELETE", "/custom-engagement", mapOf(),
+                    """{"c_from":"a@b.com","engagement_rule_id":2}""")
+            },
+            "getSeeds()" to {
+                json { ok, err -> warmup.getSeeds(ok, err) }
+                expectRequest("seeds", "GET", "/seeds", mapOf(), null)
+            },
+            "downloadSeeds()" to {
+                text { ok, err -> warmup.downloadSeeds(ok, err) }
+                expectRequest("seeds csv", "GET", "/seeds/download", mapOf(), null)
+            },
+            "getSeedCount()" to {
+                json { ok, err -> warmup.getSeedCount(ok, err) }
+                expectRequest("seed count", "GET", "/seed-count", mapOf(), null)
+            },
+            "getProgressToday()" to {
+                json { ok, err -> warmup.getProgressToday(ok, err) }
+                expectRequest("progress", "GET", "/progress-today", mapOf(), null)
+            },
+            "getSentToday()" to {
+                json { ok, err -> warmup.getSentToday(ok, err) }
+                expectRequest("sent", "GET", "/sent-today", mapOf(), null)
+            },
+            "getEmailsPerDay()" to {
+                json { ok, err -> warmup.getEmailsPerDay(ok, err) }
+                expectRequest("per day", "GET", "/emails-per-day", mapOf(), null)
+            },
+            "getStatistics(String)" to {
+                json { ok, err -> warmup.getStatistics(a, ok, err) }
+                expectRequest("stats", "GET", "/statistics", mapOf("from_address" to a), null)
+            },
+            "getStatisticsPerDay(String,String,String)" to {
+                json { ok, err -> warmup.getStatisticsPerDay(a, "2026-01-02", "2026-01-09", ok, err) }
+                expectRequest("stats per day", "GET", "/statistics-per-day",
+                    mapOf("from_address" to a, "start_date" to "2026-01-02", "end_date" to "2026-01-09"), null)
+            },
+            "getStatisticsDetailed(String)" to {
+                json { ok, err -> warmup.getStatisticsDetailed(a, ok, err) }
+                expectRequest("stats detailed", "GET", "/statistics-detailed", mapOf("c_from" to a), null)
+            },
+            "downloadStatistics(String)" to {
+                text { ok, err -> warmup.downloadStatistics(a, ok, err) }
+                expectRequest("stats csv", "GET", "/statistics/download", mapOf("c_from" to a), null)
+            },
+            "getFromAddressStatistics(String)" to {
+                json { ok, err -> warmup.getFromAddressStatistics(a, ok, err) }
+                expectRequest("from stats", "GET", "/from-address-statistics", mapOf("from_address" to a), null)
+            },
+            "checkDomainDmarc(String)" to {
+                json { ok, err -> warmup.checkDomainDmarc(a, responseCallback = ok, errorCallback = err) }
+                expectRequest("dmarc bare", "GET", "/check-domain-dmarc", mapOf("from_address" to a), null)
+            },
+            "checkDomainDmarc(String,String)" to {
+                json { ok, err -> warmup.checkDomainDmarc(a, "s1", ok, err) }
+                expectRequest("dmarc", "GET", "/check-domain-dmarc",
+                    mapOf("from_address" to a, "dkim_selector" to "s1"), null)
+            },
+            "testSmtpConfiguration(String,String,String,String,int)" to {
+                json { ok, err -> warmup.testSmtpConfiguration(a, "bob", "pw", "smtp.example.com", 465, ok, err) }
+                expectRequest("smtp", "POST", "/test-smtp-configuration", mapOf(),
+                    """{"from_address":"a@b.com","username":"bob","password":"pw","server":"smtp.example.com","port":465}""")
+            },
+        )
+        for (call in calls.values) call()
+        assertEquals("every Warmup request method is pinned",
+            RequestSweep.requestMethods(ZeroBounceWarmup::class.java).map { RequestSweep.signature(it) }.toSortedSet(),
+            calls.keys.toSortedSet())
+    }
+
     private fun <T> await(start: ((T?) -> Unit, (ErrorResponse?) -> Unit) -> Unit): Outcome<T> {
         val latch = CountDownLatch(1)
         var value: T? = null

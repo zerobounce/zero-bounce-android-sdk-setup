@@ -1899,7 +1899,7 @@ object ZeroBounceSDK {
      */
     internal fun readBody(call: Call, response: Response, errorCallback: (ErrorResponse?) -> Unit): String? =
         try {
-            response.body.string()
+            bodyText(response)
         } catch (e: IOException) {
             errorCallback(transportError(call, e))
             null
@@ -2201,8 +2201,9 @@ object ZeroBounceSDK {
                 val json = readBody(call, response) { onError(it) } ?: return
                 // LIVE: DELETE /test/{id} answers 204 No Content with an empty
                 // body. An empty 2xx is that success on DELETE only; anywhere
-                // else acceptJson reports it as an error with its status.
-                if (method == "DELETE" && response.code in 200..299 && json.isBlank()) {
+                // else acceptJson reports it as an error with its status. Only a
+                // body with nothing in it; a blank one is not JSON.
+                if (method == "DELETE" && response.code in 200..299 && json.isEmpty()) {
                     responseCallback(null)
                     return
                 }

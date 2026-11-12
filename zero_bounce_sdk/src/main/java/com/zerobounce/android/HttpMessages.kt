@@ -3,15 +3,11 @@ package com.zerobounce.android
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
-import com.google.gson.Strictness
-import com.google.gson.stream.JsonReader
-import com.google.gson.stream.JsonToken
 import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
-import java.io.StringReader
 import java.net.URLEncoder
 
 internal fun looksLikeHtml(body: String): Boolean {
@@ -43,7 +39,86 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
             value = value.replace(form, "***")
         }
     }
-    return value
+    // A server can nest those encodings in more ways than any list of spellings
+    // holds, so what is left is decoded too; a message that still holds a secret
+    // in any decoded view is dropped whole.
+    return if (exposesSecret(value, secrets)) CREDENTIAL_OMITTED else value
+}
+
+/** What a message becomes when a secret is left in it in a spelling [redactSecrets] cannot replace. */
+internal const val CREDENTIAL_OMITTED = "The response body was omitted because it contained a credential."
+
+/**
+ * Whether [text], or any view of it decoded up to three times in any order
+ * (URL-decoding with and without `+` as a space, and JSON unescaping), holds one
+ * of [secrets].
+ */
+internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
+    val wanted = secrets.filterNotNull().filter { it.isNotEmpty() }
+    if (wanted.isEmpty()) return false
+    val seen = hashSetOf(text)
+    var layer = listOf(text)
+    for (depth in 0..3) {
+        if (layer.any { view -> wanted.any { view.contains(it) } }) return true
+        if (depth == 3) break
+        layer = layer.flatMap { listOf(percentDecoded(it, false), percentDecoded(it, true), jsonUnescaped(it)) }
+            .filter { seen.add(it) }
+    }
+    return false
+}
+
+private fun hexValue(c: Int): Int = when (c) {
+    in '0'.code..'9'.code -> c - '0'.code
+    in 'a'.code..'f'.code -> c - 'a'.code + 10
+    in 'A'.code..'F'.code -> c - 'A'.code + 10
+    else -> -1
+}
+
+/** URL-decodes every valid `%XX`, and `+` as a space when asked; anything else is kept. */
+private fun percentDecoded(text: String, plusIsSpace: Boolean): String {
+    if ('%' !in text && (!plusIsSpace || '+' !in text)) return text
+    val raw = text.toByteArray(Charsets.UTF_8)
+    val bytes = java.io.ByteArrayOutputStream(raw.size)
+    var i = 0
+    while (i < raw.size) {
+        val b = raw[i].toInt()
+        if (b == '%'.code && i + 2 < raw.size && hexValue(raw[i + 1].toInt()) >= 0 && hexValue(raw[i + 2].toInt()) >= 0) {
+            bytes.write(hexValue(raw[i + 1].toInt()) * 16 + hexValue(raw[i + 2].toInt()))
+            i += 3
+            continue
+        }
+        bytes.write(if (b == '+'.code && plusIsSpace) ' '.code else b)
+        i++
+    }
+    return bytes.toString("UTF-8")
+}
+
+/** Undoes JSON string escapes (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\u` and four hex digits). */
+private fun jsonUnescaped(text: String): String {
+    if ('\\' !in text) return text
+    val out = StringBuilder(text.length)
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        if (c != '\\' || i + 1 >= text.length) {
+            out.append(c)
+            i++
+            continue
+        }
+        val escape = text[i + 1]
+        val simple = "\"\\/bfnrt".indexOf(escape)
+        if (simple >= 0) {
+            out.append("\"\\/\b\u000c\n\r\t"[simple])
+            i += 2
+        } else if (escape == 'u' && i + 5 < text.length && (2..5).all { hexValue(text[i + it].code) >= 0 }) {
+            out.append(text.substring(i + 2, i + 6).toInt(16).toChar())
+            i += 6
+        } else {
+            out.append(c)
+            i++
+        }
+    }
+    return out.toString()
 }
 
 /**
@@ -80,17 +155,127 @@ private fun secretForms(secret: String): List<String> {
 }
 
 /**
- * Whether [body] is one JSON value as RFC 8259 defines it. Gson's own parsers are
- * lenient: they read `{a:1}`, `{'a':'b'}`, `[1,]`, `NaN` and an unquoted word as
- * JSON, so a 2xx body like that would reach the caller as a result.
+ * Whether [body], exactly as it arrived, is one JSON value as RFC 8259 defines it,
+ * with only space, tab, CR and LF around it. Gson's own parsers are lenient: they
+ * read `{a:1}`, `{'a':'b'}`, `[1,]`, `NaN` and an unquoted word as JSON, and even
+ * its strict reader skips a byte order mark and reads an empty body as null. Kotlin's
+ * `trim()` drops more than JSON whitespace (NBSP, U+2003, U+000B, U+001C to U+001F),
+ * so the body is never trimmed before this check.
  */
-internal fun isStrictJson(body: String): Boolean = try {
-    val reader = JsonReader(StringReader(body))
-    reader.setStrictness(Strictness.STRICT)
-    JsonParser.parseReader(reader)
-    reader.peek() == JsonToken.END_DOCUMENT
-} catch (_: Exception) {
-    false
+internal fun isStrictJson(body: String): Boolean {
+    val pos = intArrayOf(skipJsonWhitespace(body, 0))
+    if (!strictValue(body, pos, 0)) return false
+    return skipJsonWhitespace(body, pos[0]) == body.length
+}
+
+private fun skipJsonWhitespace(text: String, from: Int): Int {
+    var at = from
+    while (at < text.length && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n')) at++
+    return at
+}
+
+/** Reads one value at `pos[0]`, leaving `pos[0]` just after it. */
+private fun strictValue(text: String, pos: IntArray, depth: Int): Boolean {
+    if (pos[0] >= text.length || depth > 512) return false
+    val c = text[pos[0]]
+    if (c == '{' || c == '[') {
+        val close = if (c == '{') '}' else ']'
+        pos[0] = skipJsonWhitespace(text, pos[0] + 1)
+        if (pos[0] < text.length && text[pos[0]] == close) {
+            pos[0]++
+            return true
+        }
+        while (true) {
+            if (c == '{') {
+                if (pos[0] >= text.length || text[pos[0]] != '"' || !strictString(text, pos)) return false
+                pos[0] = skipJsonWhitespace(text, pos[0])
+                if (pos[0] >= text.length || text[pos[0]] != ':') return false
+                pos[0] = skipJsonWhitespace(text, pos[0] + 1)
+            }
+            if (!strictValue(text, pos, depth + 1)) return false
+            pos[0] = skipJsonWhitespace(text, pos[0])
+            if (pos[0] >= text.length) return false
+            val next = text[pos[0]++]
+            if (next == close) return true
+            if (next != ',') return false
+            pos[0] = skipJsonWhitespace(text, pos[0])
+        }
+    }
+    if (c == '"') return strictString(text, pos)
+    for (literal in arrayOf("true", "false", "null")) {
+        if (text.startsWith(literal, pos[0])) {
+            pos[0] += literal.length
+            return true
+        }
+    }
+    return strictNumber(text, pos)
+}
+
+private fun strictString(text: String, pos: IntArray): Boolean {
+    var at = pos[0] + 1
+    while (at < text.length) {
+        val c = text[at]
+        when {
+            c == '"' -> {
+                pos[0] = at + 1
+                return true
+            }
+            c.code < 0x20 -> return false
+            c == '\\' -> {
+                if (at + 1 >= text.length) return false
+                val escape = text[at + 1]
+                if (escape == 'u') {
+                    if (at + 6 > text.length || (at + 2 until at + 6).any { hexValue(text[it].code) < 0 }) return false
+                    at += 6
+                } else {
+                    if (escape !in "\"\\/bfnrt") return false
+                    at += 2
+                }
+            }
+            else -> at++
+        }
+    }
+    return false
+}
+
+private fun strictNumber(text: String, pos: IntArray): Boolean {
+    var at = pos[0]
+    if (at < text.length && text[at] == '-') at++
+    if (at >= text.length) return false
+    when {
+        text[at] == '0' -> at++
+        text[at] in '1'..'9' -> at = jsonDigits(text, at)
+        else -> return false
+    }
+    if (at < text.length && text[at] == '.') {
+        val end = jsonDigits(text, at + 1)
+        if (end == at + 1) return false
+        at = end
+    }
+    if (at < text.length && (text[at] == 'e' || text[at] == 'E')) {
+        at++
+        if (at < text.length && (text[at] == '+' || text[at] == '-')) at++
+        val end = jsonDigits(text, at)
+        if (end == at) return false
+        at = end
+    }
+    pos[0] = at
+    return true
+}
+
+private fun jsonDigits(text: String, from: Int): Int {
+    var at = from
+    while (at < text.length && text[at] in '0'..'9') at++
+    return at
+}
+
+/**
+ * A response body as text, byte for byte: OkHttp's `string()` drops a leading byte
+ * order mark, which would let a BOM-prefixed body pass the strict JSON check.
+ */
+internal fun bodyText(response: Response): String {
+    val body = response.body
+    return String(body.bytes(), body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8)
 }
 
 /** Whether a content type names an HTML page. */
@@ -125,7 +310,7 @@ internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
         cloudflareTitle(text)?.let { title ->
             return ErrorResponse(errors = arrayListOf(stripErrorPrefix(title)), statusCode = statusCode)
         }
-        return if (isStrictJson(text)) {
+        return if (isStrictJson(body.orEmpty())) {
             ErrorResponse.parseError(text, statusCode)
         } else {
             ErrorResponse(
@@ -160,7 +345,8 @@ internal fun htmlPageError(statusCode: Int, body: String): ErrorResponse {
 internal fun jsonIsUsable(statusCode: Int, body: String?): Boolean {
     val text = body?.trim().orEmpty()
     if (statusCode > 299 || text.isEmpty() || looksLikeHtml(body.orEmpty())) return false
-    if (!text.startsWith("{") && !text.startsWith("[") || !isStrictJson(text)) return false
+    // The body as it arrived: trim() drops characters JSON does not allow around a value.
+    if (!isStrictJson(body.orEmpty())) return false
     // LIVE: {"success": false} on an HTTP 200 is a failure, not a result. The
     // API answers an unknown bulk file id that way.
     return !successMeansFailure(text) && !errorOnlyBody(text)
