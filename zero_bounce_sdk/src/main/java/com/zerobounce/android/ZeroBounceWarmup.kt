@@ -668,11 +668,7 @@ class ZeroBounceWarmup {
 
     /** Replaces every form of a secret in a message with ***. */
     private fun redact(text: String?, secrets: List<String>): String {
-        var value = text.orEmpty()
-        for (secret in listOf(apiKey) + secrets) {
-            if (secret.isNotEmpty()) value = value.replace(secret, "***")
-        }
-        return value
+        return redactSecrets(text.orEmpty(), listOf(apiKey) + secrets)
     }
 
     private fun url(path: String, query: Map<String, String>): String {

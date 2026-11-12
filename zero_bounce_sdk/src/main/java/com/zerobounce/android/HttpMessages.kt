@@ -1,10 +1,12 @@
 package com.zerobounce.android
 
+import com.google.gson.Gson
 import com.google.gson.JsonParser
 import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.URLEncoder
 
 internal fun looksLikeHtml(body: String): Boolean {
     val head = body.take(2000).lowercase()
@@ -20,6 +22,39 @@ internal fun stripErrorPrefix(message: String): String {
             else -> return rest
         }
     }
+}
+
+/**
+ * Replaces each secret in [text] with ***, in every form a request carries it and
+ * a server can quote it back: as is (a header, a JSON or multipart body),
+ * URL-encoded (a query string or a form) and JSON-escaped.
+ */
+internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
+    var value = text
+    for (secret in secrets) {
+        if (secret.isNullOrEmpty()) continue
+        val encoded = URLEncoder.encode(secret, "UTF-8")
+        val json = Gson().toJson(secret).let { it.substring(1, it.length - 1) }
+        for (form in listOf(secret, encoded, encoded.replace("+", "%20"), json)) {
+            value = value.replace(form, "***")
+        }
+    }
+    return value
+}
+
+/** This error with each of [secrets] redacted from its messages. */
+internal fun ErrorResponse.redacted(secrets: Iterable<String?>): ErrorResponse {
+    // The list is declared as strings, but a JSON array in an error body can
+    // put numbers or objects in it. Those are kept as they are unless their
+    // text holds a secret.
+    @Suppress("UNCHECKED_CAST")
+    val messages = errors as MutableList<Any?>
+    messages.replaceAll { message ->
+        val text = message?.toString() ?: return@replaceAll message
+        val redacted = redactSecrets(text, secrets)
+        if (redacted == text) message else redacted
+    }
+    return this
 }
 
 internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
