@@ -3,11 +3,15 @@ package com.zerobounce.android
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import com.google.gson.Strictness
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
 import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.io.StringReader
 import java.net.URLEncoder
 
 internal fun looksLikeHtml(body: String): Boolean {
@@ -43,28 +47,50 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
 }
 
 /**
- * The spellings of [secret] a server can quote back: as is and JSON-escaped (with
- * or without Gson's HTML-safe escapes such as `\u003c`, and with `/` written as a
- * backslash and a slash, as PHP's json_encode does), and each of those URL-encoded
- * with `+` or `%20` for a space (a query string, a form, or a server that echoes a
- * URL-encoded JSON body). Longest first, so a shorter form never leaves part of a
+ * The spellings of [secret] a server can quote back, composed from the encodings
+ * it can meet up to two deep: as is and JSON-escaped (with or without Gson's
+ * HTML-safe escapes such as `\u003c`, and with or without `/` written as a
+ * backslash and a slash, as PHP's json_encode does), each of those URL-encoded
+ * with `+` or `%20` for a space (a query string, a form, or a server that echoes
+ * a URL-encoded JSON body), and JSON-escaped twice (a JSON error quoted in
+ * another JSON string). Longest first, so a shorter form never leaves part of a
  * longer one behind.
  */
 private fun secretForms(secret: String): List<String> {
-    val plain = mutableListOf(secret)
+    val jsonEscapes = mutableListOf<(String) -> String>()
     for (gson in listOf(Gson(), GsonBuilder().disableHtmlEscaping().create())) {
-        val json = gson.toJson(secret).let { it.substring(1, it.length - 1) }
-        plain.add(json)
-        plain.add(json.replace("/", "\\/"))
+        val escape: (String) -> String = { text -> gson.toJson(text).let { it.substring(1, it.length - 1) } }
+        jsonEscapes.add(escape)
+        jsonEscapes.add { text -> escape(text).replace("/", "\\/") }
     }
+    val once = listOf(secret) + jsonEscapes.map { it(secret) }
     val forms = linkedSetOf<String>()
-    for (form in plain) {
+    for (form in once) {
         val encoded = URLEncoder.encode(form, "UTF-8")
         forms.add(form)
         forms.add(encoded)
         forms.add(encoded.replace("+", "%20"))
     }
+    for (escaped in once.drop(1)) {
+        for (escape in jsonEscapes) {
+            forms.add(escape(escaped))
+        }
+    }
     return forms.sortedByDescending { it.length }
+}
+
+/**
+ * Whether [body] is one JSON value as RFC 8259 defines it. Gson's own parsers are
+ * lenient: they read `{a:1}`, `{'a':'b'}`, `[1,]`, `NaN` and an unquoted word as
+ * JSON, so a 2xx body like that would reach the caller as a result.
+ */
+internal fun isStrictJson(body: String): Boolean = try {
+    val reader = JsonReader(StringReader(body))
+    reader.setStrictness(Strictness.STRICT)
+    JsonParser.parseReader(reader)
+    reader.peek() == JsonToken.END_DOCUMENT
+} catch (_: Exception) {
+    false
 }
 
 /** Whether a content type names an HTML page. */
@@ -99,10 +125,9 @@ internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
         cloudflareTitle(text)?.let { title ->
             return ErrorResponse(errors = arrayListOf(stripErrorPrefix(title)), statusCode = statusCode)
         }
-        return try {
-            JsonParser.parseString(text)
+        return if (isStrictJson(text)) {
             ErrorResponse.parseError(text, statusCode)
-        } catch (_: Throwable) {
+        } else {
             ErrorResponse(
                 errors = arrayListOf("ZeroBounce returned a response that is not valid JSON."),
                 statusCode = statusCode,
@@ -135,7 +160,7 @@ internal fun htmlPageError(statusCode: Int, body: String): ErrorResponse {
 internal fun jsonIsUsable(statusCode: Int, body: String?): Boolean {
     val text = body?.trim().orEmpty()
     if (statusCode > 299 || text.isEmpty() || looksLikeHtml(body.orEmpty())) return false
-    if (!text.startsWith("{") && !text.startsWith("[")) return false
+    if (!text.startsWith("{") && !text.startsWith("[") || !isStrictJson(text)) return false
     // LIVE: {"success": false} on an HTTP 200 is a failure, not a result. The
     // API answers an unknown bulk file id that way.
     return !successMeansFailure(text) && !errorOnlyBody(text)

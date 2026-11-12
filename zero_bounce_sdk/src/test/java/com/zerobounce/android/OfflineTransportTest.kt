@@ -275,6 +275,41 @@ class OfflineTransportTest {
     }
 
     /**
+     * A 2xx body that is not JSON is an API error with status 200 on every JSON
+     * call, Warmup included (E7): plain text, a CSV under application/json, and
+     * the bodies only a lenient parser reads as JSON — unquoted or single-quoted
+     * names, a trailing comma, `;` or `=` as a separator, NaN and Infinity, and a
+     * word that starts with a digit, and a JSON value with more after it. Gson reads
+     * every one of the latter leniently.
+     */
+    @Test
+    fun aBodyThatIsNotStrictJsonIsAnErrorWithStatus200OnEveryJsonCall() {
+        val bodies = listOf("hello there", "email,status\na@b.com,valid\n", "{a:1}", "{'a':'b'}", "[1,]",
+            "[1;2]", "{\"a\"=1}", "{\"a\":NaN}", "-Infinity", "123abc",
+            "{\"a\":1} {\"b\":2}", "[1] x")
+        val download = LoopbackServer.answer(200, "text/csv", "email\na@example.com\n".toByteArray())
+        for (body in bodies) {
+            var checked = 0
+            val json = LoopbackServer.answer(200, "application/json", body.toByteArray())
+            LoopbackServer { request, out ->
+                val target = request.target.lowercase()
+                (if (target.contains("getfile") || target.contains("download")) download else json)(request, out)
+            }.use { server ->
+                sweep(server.reroute) { method, outcome, failures ->
+                    if (isDownload(method)) return@sweep
+                    checked++
+                    if (outcome.successes.isNotEmpty() || outcome.errors.size != 1 ||
+                        outcome.errors[0]?.statusCode != 200
+                    ) {
+                        failures.add("$body $outcome")
+                    }
+                }
+            }
+            assertTrue("$body JSON calls checked: $checked", checked >= 80)
+        }
+    }
+
+    /**
      * Every download, Warmup's CSV downloads included, refuses a 200 that is not a
      * file: an empty body under text/csv (D3), and a JSON content type whatever
      * the body (D1) — here a CSV-looking body that no body check would catch.

@@ -80,31 +80,52 @@ class OfflineRedactionSweepTest {
     private fun jsonForms(secret: String): List<String> =
         listOf(json(secret), phpJson(secret)).map { it.substring(1, it.length - 1) }
 
+    /** [text] JSON-escaped by [gson], without the quotes. */
+    private fun escaped(gson: Gson, text: String): String =
+        gson.toJson(text).let { it.substring(1, it.length - 1) }
+
+    /**
+     * The JSON escapes a server can apply: Gson's HTML-safe escaping (`\u003c`),
+     * its plain escaping, and each with `/` as a backslash and a slash (PHP's
+     * json_encode).
+     */
+    private val jsonEscapes: List<(String) -> String> = listOf(
+        { text -> escaped(Gson(), text) },
+        { text -> escaped(Gson(), text).replace("/", "\\/") },
+        { text -> escaped(GsonBuilder().disableHtmlEscaping().create(), text) },
+        { text -> escaped(GsonBuilder().disableHtmlEscaping().create(), text).replace("/", "\\/") },
+    )
+
+    /** The URL encodings: none, a space as `+` (a form) and as `%20`. */
+    private val urlEncodings: List<(String) -> String> = listOf(
+        { text -> text },
+        { text -> URLEncoder.encode(text, "UTF-8") },
+        { text -> URLEncoder.encode(text, "UTF-8").replace("+", "%20") },
+    )
+
     /**
      * Every spelling a server can quote a secret back in, each of which the SDK
-     * must redact: as is; JSON-escaped with Gson's HTML-safe escapes (`\u003c`),
-     * without them, and either way with `/` as a backslash and a slash (PHP); and
-     * each of those URL-encoded with a space as `+` and as `%20`.
+     * must redact, composed from the encoders up to two deep: {raw, each JSON
+     * escape} x {each URL encoding}, and each JSON escape applied to each
+     * JSON-escaped form (a JSON error quoted inside another JSON string).
+     * Duplicates are dropped; [everySpellingOfTheTestSecretsIsDistinct] pins how
+     * many remain.
      */
     private fun forms(secret: String): List<String> {
-        val plain = GsonBuilder().disableHtmlEscaping().create().toJson(secret)
-        val bases = mutableListOf(secret)
-        for (quoted in listOf(json(secret), plain)) {
-            val inner = quoted.substring(1, quoted.length - 1)
-            bases.add(inner)
-            bases.add(inner.replace("/", "\\/"))
-        }
-        return bases.flatMap { base ->
-            val encoded = URLEncoder.encode(base, "UTF-8")
-            listOf(base, encoded, encoded.replace("+", "%20"))
-        }
+        val once = listOf(secret) + jsonEscapes.map { it(secret) }
+        val forms = linkedSetOf<String>()
+        for (base in once) urlEncodings.forEach { forms.add(it(base)) }
+        for (base in once.drop(1)) jsonEscapes.forEach { forms.add(it(base)) }
+        return forms.toList()
     }
 
     @Test
     fun everySpellingOfTheTestSecretsIsDistinct() {
         for (secret in listOf(key, password)) {
-            val forms = forms(secret)
-            assertEquals(forms.toString(), 15, forms.toSet().size)
+            // 5 bases x 3 URL encodings, and 4 x 4 double escapes less the 4
+            // where the plain escape of an HTML-safe one repeats its HTML-safe
+            // escape (nothing HTML-sensitive is left to tell them apart).
+            assertEquals(forms(secret).toString(), 15 + 12, forms(secret).size)
         }
     }
 
@@ -126,11 +147,21 @@ class OfflineRedactionSweepTest {
      */
     @Test
     fun everySpellingOfASecretInAnErrorBodyIsRedacted() {
-        val quote: (Request) -> String = {
-            "Bad request: " + forms(if (it.url.encodedPath.contains("test-smtp")) password else key).joinToString(" | ")
-        }
-        sweep("400-forms", answering(400, "text/plain", quote), everyCallFails = true) { outcome ->
-            outcome.errors.firstOrNull()?.errors.toString().contains("Bad request: *** | ***")
+        // A few spellings at a time, so each body stays under the SDK's
+        // 1000-character cut and is quoted, not replaced by a generic message.
+        val chunks = forms(key).indices.chunked(6)
+        for (chunk in chunks) {
+            for (secret in listOf(key, password)) {
+                val body = "Bad request: " + chunk.map { forms(secret)[it] }.joinToString(" | ")
+                assertTrue(body, body.length < 1000)
+            }
+            val quote: (Request) -> String = { request ->
+                val secret = if (request.url.encodedPath.contains("test-smtp")) password else key
+                "Bad request: " + chunk.map { forms(secret)[it] }.joinToString(" | ")
+            }
+            sweep("400-forms-${chunk.first()}", answering(400, "text/plain", quote), everyCallFails = true) { outcome ->
+                outcome.errors.firstOrNull()?.errors.toString().contains("Bad request: *** | ***")
+            }
         }
     }
 

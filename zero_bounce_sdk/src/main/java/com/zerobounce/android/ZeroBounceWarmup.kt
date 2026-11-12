@@ -674,18 +674,6 @@ class ZeroBounceWarmup {
         )
     }
 
-    /**
-     * Whether a body could be JSON at all. Gson's parser is lenient and would
-     * read bare junk as a string, so the shape is checked first.
-     */
-    private fun looksLikeJson(body: String): Boolean {
-        val trimmed = body.trim()
-        if (trimmed.isEmpty()) return false
-        val first = trimmed[0]
-        if (first == '{' || first == '[' || first == '"' || first == '-' || first.isDigit()) return true
-        return trimmed == "true" || trimmed == "false" || trimmed == "null"
-    }
-
     private fun encode(value: String): String =
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
@@ -784,9 +772,9 @@ class ZeroBounceWarmup {
                 errorCallback(redacted(htmlPageError(statusCode, text), secrets))
                 return@send
             }
-            // Gson parses leniently, so junk would come back as a string
-            // instead of raising: reject it before it reaches the parser.
-            if (!looksLikeJson(text)) {
+            // Gson parses leniently, so junk ({a:1}, NaN, a bare word) would
+            // come back as a result: only strict JSON reaches the parser.
+            if (!isStrictJson(text)) {
                 errorCallback(redacted(httpError(statusCode, text), secrets))
                 return@send
             }
