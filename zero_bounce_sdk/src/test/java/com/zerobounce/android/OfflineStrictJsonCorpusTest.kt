@@ -2,6 +2,7 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.whenever
@@ -12,12 +13,16 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.lang.reflect.Method
+import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
+import java.lang.reflect.WildcardType
 
 /**
  * Strict JSON (check E7) on every JSON call of [ZeroBounceClient] and
@@ -94,6 +99,75 @@ class OfflineStrictJsonCorpusTest {
         for (entry in corpus()) {
             sweep(entry, failures)
         }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /** A failure line without the whole (possibly huge) body in it. */
+    private fun shortened(failures: List<String>) =
+        failures.map { if (it.length <= 600) it else it.take(300) + " ... " + it.takeLast(300) }
+
+    /**
+     * The strict check's depth limit: a 2xx body nested 200000 deep is "not valid
+     * JSON", an API error with status 200 on every JSON call, and never a
+     * StackOverflowError on OkHttp's dispatcher thread (no callback at all), which
+     * is what a recursive reader without the limit does.
+     */
+    @Test
+    fun aBodyNestedPastTheDepthLimitIsAnErrorWithStatus200OnEveryJsonCall() {
+        val deep = "[".repeat(200_000) + "]".repeat(200_000)
+        assertFalse("200000 nested arrays are past the limit", isStrictJson(deep))
+        assertFalse("nested under an object", isStrictJson("{\"a\":$deep}"))
+        assertTrue("500 nested arrays are within it", isStrictJson("[".repeat(500) + "]".repeat(500)))
+        val failures = mutableListOf<String>()
+        sweep(Entry(false, deep), failures)
+        assertTrue("${failures.size} failures:\n" + shortened(failures).joinToString("\n"), failures.isEmpty())
+    }
+
+    /** The type a request method hands its response callback (its first callback). */
+    private fun responseType(method: Method): Type {
+        val callback = method.genericParameterTypes.first {
+            it is ParameterizedType && it.rawType == Function1::class.java
+        } as ParameterizedType
+        val arg = callback.actualTypeArguments[0]
+        return if (arg is WildcardType) (arg.lowerBounds.firstOrNull() ?: arg.upperBounds[0]) else arg
+    }
+
+    /**
+     * Wrong shape (check E7): a 2xx body that is strict JSON but not the shape a
+     * typed call returns is an API error with status 200 on every typed call, never
+     * a default-filled result, a null result or an error without a status. Typed
+     * calls are found by reflection: every request method of [ZeroBounceClient]
+     * that is not a download and does not hand back raw JSON ([JsonElement]).
+     * [ZeroBounceWarmup] hands back any JSON value, so no JSON value is the wrong
+     * shape for it.
+     */
+    @Test
+    fun aWrongShapeIsAnErrorWithStatus200OnEveryTypedCall() {
+        val failures = mutableListOf<String>()
+        var typed = 0
+        for (body in listOf("0", "\"x\"", "true", "null", "[]", "[{}]")) {
+            val interceptor = Interceptor { chain ->
+                Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                    .body(body.toByteArray(Charsets.UTF_8).toResponseBody("application/json".toMediaType()))
+                    .build()
+            }
+            val sweep = RequestSweep(context, dir, csv)
+            val client = ZeroBounceClient()
+            client.transportInterceptor = interceptor
+            client.initialize("shape-key")
+            for (method in RequestSweep.requestMethods(ZeroBounceClient::class.java)) {
+                if (isDownload(method) || responseType(method) == JsonElement::class.java) continue
+                typed++
+                val outcome = sweep.invoke(client, method)
+                if (outcome.thrown != null || outcome.timedOut || outcome.successes.isNotEmpty() ||
+                    outcome.errors.size != 1 || outcome.errors[0]?.statusCode != 200 ||
+                    body == "null" && outcome.errors[0]?.errors != listOf(WRONG_SHAPE)
+                ) {
+                    failures.add("$body $outcome")
+                }
+            }
+        }
+        assertTrue("typed calls swept: $typed", typed > 200)
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 

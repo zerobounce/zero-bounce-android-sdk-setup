@@ -23,7 +23,8 @@ import kotlin.random.Random
 
 /**
  * Redaction is closed under encoding (checks S4 and S7): a secret quoted back in any
- * composition of up to three encodings (URL with a space as `%20`, URL with a space
+ * composition of up to four encodings (the SDK's own request encoding plus three a
+ * server can add) (URL with a space as `%20`, URL with a space
  * as `+`, JSON, JSON with `/` as a backslash and a slash) never appears in any
  * decoded view of what the caller gets. The compositions are random, from a fixed
  * seed so a failure repeats; the decoder here is the test's own, not the SDK's.
@@ -65,11 +66,11 @@ class OfflineRedactionFuzzTest {
         else -> jsonEscape(text, htmlSafe).replace("/", "\\/")
     }
 
-    /** One random composition of up to three encodings, and its name. */
+    /** One random composition of up to four encodings, and its name. */
     private fun compose(random: Random, secret: String): Pair<String, String> {
         var value = secret
         val name = mutableListOf<String>()
-        repeat(1 + random.nextInt(3)) {
+        repeat(1 + random.nextInt(4)) {
             val which = random.nextInt(4)
             val htmlSafe = random.nextBoolean()
             value = encode(which, htmlSafe, value)
@@ -122,11 +123,11 @@ class OfflineRedactionFuzzTest {
         return out.toString()
     }
 
-    /** The text and every view of it decoded up to three times, in any order. */
+    /** The text and every view of it decoded up to four times, in any order. */
     private fun views(text: String): Set<String> {
         val all = linkedSetOf(text)
         var layer = listOf(text)
-        repeat(3) {
+        repeat(4) {
             layer = layer.flatMap { listOf(percentDecode(it, false), percentDecode(it, true), jsonUnescape(it)) }
                 .filter { all.add(it) }
         }
@@ -157,6 +158,58 @@ class OfflineRedactionFuzzTest {
                 val message = redactSecrets("Bad request: $encoded (quoted)", listOf(key, password))
                 if (exposes(message, secret)) failures.add("$name: $message")
             }
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /** Every `%XX` in [text] with lower-case hex digits. */
+    private fun lowerHex(text: String): String =
+        Regex("%[0-9A-F]{2}").replace(text) { it.value.lowercase() }
+
+    /** Every UTF-16 unit of [text] as a JSON u-escape (backslash, u, four hex digits), lower-case hex. */
+    private fun unicodeEscaped(text: String): String =
+        text.map { "\\u" + String.format("%04x", it.code) }.joinToString("")
+
+    /** A secret outside the BMP, so its JSON u-escaped spelling is a surrogate pair. */
+    private val astral = "pw😀x/\"9"
+
+    /** A secret whose only special character is a space, so its URL spelling has no `%`. */
+    private val spaced = "sp ace7"
+
+    /**
+     * Each decode step of the check on its own, so removing one fails here and not
+     * only by chance in the random compositions: percent-decoding with lower-case hex
+     * and after an invalid UTF-8 run, `+` as a space, JSON unescaping incl. u-escapes
+     * and a surrogate pair, a view with no `%` that still needs `+` decoded, four
+     * layers, and a NUL (raw or `%00`) before the secret, which must not end the check.
+     */
+    @Test
+    fun everyDecodeStepIsChecked() {
+        val url20 = { t: String -> encode(0, false, t) }
+        val urlPlus = { t: String -> encode(1, false, t) }
+        val json = { t: String -> encode(2, false, t) }
+        val cases = listOf(
+            "lower-case hex" to lowerHex(url20(key)),
+            "invalid UTF-8 run first" to "%FF%C3%28 " + url20(urlPlus(key)),
+            "invalid UTF-8 run, lower-case hex" to "%ff%c3 " + lowerHex(urlPlus(url20(key))),
+            "+ under u-escapes" to unicodeEscaped(urlPlus(key)),
+            "u-escapes" to unicodeEscaped(key),
+            "surrogate pair" to unicodeEscaped(astral),
+            "surrogate pair under URL" to url20(unicodeEscaped(astral)),
+            "+ without %" to unicodeEscaped(urlPlus(spaced)),
+            "four layers" to url20(json(urlPlus(json(url20(key))))),
+            "four layers, u-escapes inside" to urlPlus(url20(unicodeEscaped(url20(key)))),
+            "NUL first" to "a\u0000b " + lowerHex(url20(key)),
+            "%00 first" to "%00 " + lowerHex(url20(url20(key))),
+            "%00 first, JSON" to "%00\\u0000 " + unicodeEscaped(key),
+        )
+        val secrets = listOf(key, astral, spaced)
+        val failures = mutableListOf<String>()
+        for ((name, encoded) in cases) {
+            val body = "Bad request: $encoded (quoted)"
+            assertTrue("$name: the test's decoder finds the secret in $body", exposes(body, *secrets.toTypedArray()))
+            val message = redactSecrets(body, secrets)
+            if (exposes(message, *secrets.toTypedArray())) failures.add("$name: $message")
         }
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }

@@ -117,8 +117,9 @@ object ZeroBounceSDK {
         .registerTypeAdapter(Boolean::class.java, StrictBooleanAdapter)
         .create()
 
-    private inline fun <reified T : JSONConvertable> String.toObject(): T? =
-        gson.fromJson(this, T::class.java)
+    /** Decodes a typed result; a JSON `null` is not one (it is the wrong shape for the call). */
+    private inline fun <reified T : JSONConvertable> String.toObject(): T =
+        gson.fromJson(this, T::class.java) ?: throw WrongShapeException()
 
     /**
      * Initializes the SDK.
@@ -2134,7 +2135,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { gson.fromJson(it, responseClass) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { gson.fromJson(it, responseClass) ?: throw WrongShapeException() }) {
                     responseCallback(it)
                 }
             }

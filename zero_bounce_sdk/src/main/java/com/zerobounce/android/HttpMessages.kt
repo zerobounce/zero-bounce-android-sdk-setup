@@ -45,22 +45,28 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
     return if (exposesSecret(value, secrets)) CREDENTIAL_OMITTED else value
 }
 
+/** The error for a 2xx body that is valid JSON but not the shape the call returns (a JSON `null` for a result). */
+internal const val WRONG_SHAPE = "ZeroBounce returned JSON that is not the shape this call returns."
+
+/** A typed call's body decoded to nothing: JSON `null`. */
+internal class WrongShapeException : RuntimeException(WRONG_SHAPE)
+
 /** What a message becomes when a secret is left in it in a spelling [redactSecrets] cannot replace. */
 internal const val CREDENTIAL_OMITTED = "The response body was omitted because it contained a credential."
 
 /**
- * Whether [text], or any view of it decoded up to three times in any order
- * (URL-decoding with and without `+` as a space, and JSON unescaping), holds one
- * of [secrets].
+ * Whether [text], or any view of it decoded up to four times in any order (the
+ * SDK's own request encoding plus three layers a server can add; URL-decoding
+ * with and without `+` as a space, and JSON unescaping), holds one of [secrets].
  */
 internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
     val wanted = secrets.filterNotNull().filter { it.isNotEmpty() }
     if (wanted.isEmpty()) return false
     val seen = hashSetOf(text)
     var layer = listOf(text)
-    for (depth in 0..3) {
+    for (depth in 0..4) {
         if (layer.any { view -> wanted.any { view.contains(it) } }) return true
-        if (depth == 3) break
+        if (depth == 4) break
         layer = layer.flatMap { listOf(percentDecoded(it, false), percentDecoded(it, true), jsonUnescaped(it)) }
             .filter { seen.add(it) }
     }
@@ -424,6 +430,9 @@ internal fun successMeansFailure(body: String): Boolean {
  * reported by name; anything else as [httpError] reports the body.
  */
 internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): ErrorResponse {
+    if (cause is WrongShapeException) {
+        return ErrorResponse(errors = arrayListOf(WRONG_SHAPE), statusCode = statusCode)
+    }
     if (cause is StrictBooleanException) {
         return ErrorResponse(errors = arrayListOf(cause.message.orEmpty()), statusCode = statusCode)
     }
