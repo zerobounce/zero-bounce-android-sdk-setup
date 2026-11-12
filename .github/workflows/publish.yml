@@ -46,6 +46,21 @@ jobs:
             exit 1
           fi
           
+      - name: Verify manifest version matches tag
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          PKG_VERSION=$(grep -m1 -E "^[[:space:]]*PUBLISH_VERSION[[:space:]]*=" zero_bounce_sdk/build.gradle | sed -E "s/.*'([^']+)'.*/\\1/")
+          if [ -z "$PKG_VERSION" ]; then
+            echo "Error: could not read the version from zero_bounce_sdk/build.gradle."
+            exit 1
+          fi
+          if [ "$PKG_VERSION" != "${TAG#v}" ]; then
+            echo "Error: zero_bounce_sdk/build.gradle version ($PKG_VERSION) does not match tag ($TAG)."
+            exit 1
+          fi
+          echo "Publishing $TAG (zero_bounce_sdk/build.gradle version $PKG_VERSION)"
+
       - name: Record tag commit SHA
         id: tag_sha
         env:
