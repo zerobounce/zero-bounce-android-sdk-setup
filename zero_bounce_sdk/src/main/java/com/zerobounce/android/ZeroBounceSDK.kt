@@ -188,11 +188,18 @@ object ZeroBounceSDK {
      */
     private inline fun <R> acceptJson(
         statusCode: Int,
+        contentType: String?,
         body: String?,
         errorCallback: (ErrorResponse?) -> Unit,
         parse: (String) -> R,
         deliver: (R) -> Unit,
     ) {
+        // A 2xx whose content type is text/html is a proxy's or Cloudflare's
+        // page, not an API response, whatever its body looks like.
+        if (statusCode <= 299 && isHtmlContentType(contentType)) {
+            errorCallback(htmlPageError(statusCode, body.orEmpty()))
+            return
+        }
         if (!jsonIsUsable(statusCode, body)) {
             errorCallback(httpError(statusCode, body))
             return
@@ -850,7 +857,7 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
@@ -919,7 +926,7 @@ object ZeroBounceSDK {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
                 if (logEnabled) Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
@@ -1962,7 +1969,7 @@ object ZeroBounceSDK {
                     onError(httpError(response.code, json))
                     return
                 }
-                acceptJson(response.code, json, onError, { it.toObject<T>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }) {
                     responseCallback(it, response.code)
                 }
             }
@@ -2001,7 +2008,7 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                acceptJson(response.code, json, onError, { it.toObject<T>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }) {
                     responseCallback(it)
                 }
             }
@@ -2127,7 +2134,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, json, onError, { gson.fromJson(it, responseClass) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { gson.fromJson(it, responseClass) }) {
                     responseCallback(it)
                 }
             }
@@ -2153,7 +2160,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2199,7 +2206,7 @@ object ZeroBounceSDK {
                     responseCallback(null)
                     return
                 }
-                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2225,7 +2232,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
                     responseCallback(it)
                 }
             }
@@ -2256,7 +2263,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, json, onError, { it.toObject<ZBSendFileResponse>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }

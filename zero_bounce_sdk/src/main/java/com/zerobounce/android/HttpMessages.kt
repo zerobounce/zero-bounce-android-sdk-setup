@@ -7,6 +7,7 @@ import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.URLEncoder
 
 internal fun looksLikeHtml(body: String): Boolean {
@@ -42,21 +43,33 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
 }
 
 /**
- * The spellings of [secret] a server can quote back: as is, URL-encoded (`+` or
- * `%20` for a space) and JSON-escaped, with or without Gson's HTML-safe escapes and
- * with `/` written as a backslash and a slash (PHP's json_encode). Longest first,
- * so a shorter form never leaves part of a longer one behind.
+ * The spellings of [secret] a server can quote back: as is and JSON-escaped (with
+ * or without Gson's HTML-safe escapes such as `\u003c`, and with `/` written as a
+ * backslash and a slash, as PHP's json_encode does), and each of those URL-encoded
+ * with `+` or `%20` for a space (a query string, a form, or a server that echoes a
+ * URL-encoded JSON body). Longest first, so a shorter form never leaves part of a
+ * longer one behind.
  */
 private fun secretForms(secret: String): List<String> {
-    val encoded = URLEncoder.encode(secret, "UTF-8")
-    val forms = linkedSetOf(secret, encoded, encoded.replace("+", "%20"))
+    val plain = mutableListOf(secret)
     for (gson in listOf(Gson(), GsonBuilder().disableHtmlEscaping().create())) {
         val json = gson.toJson(secret).let { it.substring(1, it.length - 1) }
-        forms.add(json)
-        forms.add(json.replace("/", "\\/"))
+        plain.add(json)
+        plain.add(json.replace("/", "\\/"))
+    }
+    val forms = linkedSetOf<String>()
+    for (form in plain) {
+        val encoded = URLEncoder.encode(form, "UTF-8")
+        forms.add(form)
+        forms.add(encoded)
+        forms.add(encoded.replace("+", "%20"))
     }
     return forms.sortedByDescending { it.length }
 }
+
+/** Whether a content type names an HTML page. */
+internal fun isHtmlContentType(contentType: String?): Boolean =
+    contentType.orEmpty().contains("text/html", ignoreCase = true)
 
 /** This error with each of [secrets] redacted from its messages. */
 internal fun ErrorResponse.redacted(secrets: Iterable<String?>): ErrorResponse {
@@ -207,7 +220,7 @@ internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): Err
 }
 
 internal fun downloadRejected(statusCode: Int, contentType: String, bytes: ByteArray): Boolean {
-    if (statusCode > 299) return true
+    if (statusCode > 299 || isHtmlContentType(contentType)) return true
     val text = bytes.toString(Charsets.UTF_8)
     if (text.isBlank() || looksLikeHtml(text)) return true
     if (contentType.contains("application/json", ignoreCase = true)) return true
@@ -235,13 +248,20 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     val head = response.peekBody(DOWNLOAD_SNIFF_BYTES).bytes().toString(Charsets.UTF_8)
     val mayBeError = code > 299 ||
         contentType.contains("application/json", ignoreCase = true) ||
+        isHtmlContentType(contentType) ||
         head.isBlank() ||
         looksLikeHtml(head) ||
         head.trimStart().startsWith("{")
     if (mayBeError) {
         val bytes = response.body.bytes()
         if (downloadRejected(code, contentType, bytes)) {
-            val error = httpError(code, bytes.toString(Charsets.UTF_8))
+            val text = bytes.toString(Charsets.UTF_8)
+            // A text/html content type on a 2xx is a proxy's page, whatever the body.
+            val error = if (code <= 299 && isHtmlContentType(contentType)) {
+                htmlPageError(code, text)
+            } else {
+                httpError(code, text)
+            }
             if (error.errors.isEmpty()) {
                 // {"success": false} with no message.
                 error.errors = arrayListOf("ZeroBounce returned an error instead of the file (HTTP $code).")
@@ -255,17 +275,22 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     return null
 }
 
+/** Opens the temporary file a download is written to. Tests replace it with one that fails part-way. */
+@Volatile
+internal var downloadFileOpener: (File) -> OutputStream = { FileOutputStream(it) }
+
 /**
  * Writes a download to a temporary file next to [file] and moves it over [file]
- * only once it is complete, so a download that fails part-way leaves whatever
- * was at [file] untouched, and no partial file behind (D4).
+ * only once it is complete, so a download whose network read or disk write fails
+ * part-way (a full disk, a file size limit) leaves whatever was at [file]
+ * untouched, and no partial file behind (D4).
  */
-private fun writeDownload(file: File, write: (FileOutputStream) -> Unit) {
+private fun writeDownload(file: File, write: (OutputStream) -> Unit) {
     val dir = file.absoluteFile.parentFile
     dir?.mkdirs()
     val temp = File.createTempFile(".${file.name}.", ".part", dir)
     try {
-        FileOutputStream(temp).use(write)
+        downloadFileOpener(temp).use(write)
         // rename replaces an existing file on Android (POSIX); a platform that
         // will not rename over a file gets the old one removed first.
         if (!temp.renameTo(file) && !(file.delete() && temp.renameTo(file))) {

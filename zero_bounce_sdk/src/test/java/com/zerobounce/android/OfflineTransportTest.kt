@@ -180,6 +180,101 @@ class OfflineTransportTest {
     }
 
     /**
+     * Every download whose disk write fails part-way (a full disk, a file size
+     * limit) reports one error and leaves the file already at its target as it
+     * was, with no partial file next to it (D4). A download that succeeds
+     * replaces the existing file.
+     */
+    @Test
+    fun everyDownloadKeepsTheExistingFileWhenTheWriteFails() {
+        val old = "OLD RESULTS"
+        val csvText = "email,status\na@example.com,valid\n"
+        val csv = LoopbackServer.answer(200, "text/csv", csvText.toByteArray())
+        val json = LoopbackServer.answer(200, "application/json", "{}".toByteArray())
+        val original = downloadFileOpener
+        for (failing in listOf(true, false)) {
+            val inFilesDir = File(dir, "fid.csv").apply { writeText(old) }
+            var checked = 0
+            if (failing) {
+                downloadFileOpener = { file ->
+                    object : java.io.FilterOutputStream(java.io.FileOutputStream(file)) {
+                        override fun write(b: ByteArray, off: Int, len: Int) {
+                            out.write(b, off, len / 2)
+                            out.flush()
+                            throw java.io.IOException("File too large")
+                        }
+                    }
+                }
+            }
+            try {
+                LoopbackServer { request, out ->
+                    val target = request.target.lowercase()
+                    (if (target.contains("getfile") || target.contains("download")) csv else json)(request, out)
+                }.use { server ->
+                    sweep(server.reroute, onOut = { it.writeText(old) }) { method, outcome, failures ->
+                        if (!isDownload(method) || method.declaringClass == ZeroBounceWarmup::class.java) return@sweep
+                        checked++
+                        val ok = if (failing) {
+                            outcome.successes.isEmpty() && outcome.errors.size == 1
+                        } else {
+                            outcome.successes.size == 1 && outcome.errors.isEmpty()
+                        }
+                        val target = outcome.out?.let { File(it) } ?: inFilesDir
+                        val left = if (target.exists()) target.readText() else "(deleted)"
+                        if (!ok || left != (if (failing) old else csvText)) {
+                            failures.add("failing=$failing $outcome left ${left.take(30)} at ${target.name}")
+                        }
+                        inFilesDir.writeText(old)
+                        dir.listFiles().orEmpty().filter { it.name.endsWith(".part") }.forEach {
+                            failures.add("${outcome.signature} left a temporary file ${it.name}")
+                            it.delete()
+                        }
+                    }
+                }
+            } finally {
+                downloadFileOpener = original
+            }
+            assertEquals("failing=$failing: every download that writes a file", 4, checked)
+        }
+    }
+
+    /**
+     * An HTML content type alone makes a 2xx an HTML error page, whatever the
+     * body: a JSON-looking `{"a":1}` on every JSON call (Warmup included) and a
+     * CSV-looking body on every download, Warmup's CSV downloads included. Each
+     * call reports one error with status 200 and no download writes a file. The
+     * bodies pass every body check, so only the content-type half of the guard
+     * refuses them.
+     */
+    @Test
+    fun anHtmlContentTypeAloneIsAnErrorOnEveryPath() {
+        val html = "text/html; charset=utf-8"
+        val download = LoopbackServer.answer(200, html, "email,status\na@example.com,valid\n".toByteArray())
+        val json = LoopbackServer.answer(200, html, "{\"a\":1}".toByteArray())
+        var downloads = 0
+        LoopbackServer { request, out ->
+            val target = request.target.lowercase()
+            (if (target.contains("getfile") || target.contains("download")) download else json)(request, out)
+        }.use { server ->
+            sweep(server.reroute) { method, outcome, failures ->
+                if (isDownload(method)) downloads++
+                if (outcome.successes.isNotEmpty() || outcome.errors.size != 1 ||
+                    outcome.errors[0]?.statusCode != 200
+                ) {
+                    failures.add("html-type $outcome")
+                }
+                val written = outcome.out?.let { listOf(File(it)) }
+                    ?: dir.listFiles().orEmpty().filter { it.name != "in.csv" }
+                written.filter { it.exists() }.forEach {
+                    failures.add("html-type ${outcome.signature} wrote ${it.name}")
+                    it.delete()
+                }
+            }
+        }
+        assertEquals("every download, Warmup's two CSV downloads included", 6, downloads)
+    }
+
+    /**
      * Every download, Warmup's CSV downloads included, refuses a 200 that is not a
      * file: an empty body under text/csv (D3), and a JSON content type whatever
      * the body (D1) — here a CSV-looking body that no body check would catch.

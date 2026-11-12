@@ -213,8 +213,13 @@ internal class RequestSweep(private val context: Context, private val dir: File,
     }
 
     companion object {
-        /** The SMTP password the sweep sends, with a quote and a slash, which JSON escaping changes. */
-        const val SMTP_PASSWORD = "smtp\"pa/ss"
+        /**
+         * The SMTP password the sweep sends. JSON escaping changes its quote, slash
+         * and backslash, Gson's HTML-safe escaping its `= < > & '`, and URL encoding
+         * all of those, its `+` and `%`, and its space (as `+` or `%20`), so every
+         * spelling of it differs.
+         */
+        const val SMTP_PASSWORD = "smtp\"pa/ss w=<>&'\\+%"
 
         fun isCallback(type: Class<*>) = type == Function1::class.java
 

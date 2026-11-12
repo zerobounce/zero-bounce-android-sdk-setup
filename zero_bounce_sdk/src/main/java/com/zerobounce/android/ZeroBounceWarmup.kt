@@ -774,9 +774,14 @@ class ZeroBounceWarmup {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
         secrets: List<String> = emptyList(),
     ) {
-        send(method, path, query, body, secrets, errorCallback) { statusCode, _, text ->
+        send(method, path, query, body, secrets, errorCallback) { statusCode, contentType, text ->
             if (statusCode == 204 || text.isBlank()) {
                 responseCallback(null)
+                return@send
+            }
+            // A text/html content type is a proxy's page, whatever the body looks like.
+            if (isHtmlContentType(contentType)) {
+                errorCallback(redacted(htmlPageError(statusCode, text), secrets))
                 return@send
             }
             // Gson parses leniently, so junk would come back as a string

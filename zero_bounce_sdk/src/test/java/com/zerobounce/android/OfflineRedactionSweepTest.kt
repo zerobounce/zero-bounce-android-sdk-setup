@@ -2,6 +2,7 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.whenever
 import okhttp3.Interceptor
@@ -36,9 +37,10 @@ class OfflineRedactionSweepTest {
 
     /**
      * A key with characters that URL encoding and JSON escaping change (`+`, `/`,
-     * `"` and `%`), so neither form equals the key as sent.
+     * `"`, `\`, `%` and a space) and that Gson's HTML-safe escaping changes
+     * (`= < > & '`), so each of its spellings (see [forms]) differs from every other.
      */
-    private val key = "echo+key/12\"34%567890"
+    private val key = "echo+key/12\"34%56 7=<>&'\\890"
 
     /** The SMTP password the Warmup sweep sends to testSmtpConfiguration. */
     private val password = RequestSweep.SMTP_PASSWORD
@@ -78,9 +80,62 @@ class OfflineRedactionSweepTest {
     private fun jsonForms(secret: String): List<String> =
         listOf(json(secret), phpJson(secret)).map { it.substring(1, it.length - 1) }
 
+    /**
+     * Every spelling a server can quote a secret back in, each of which the SDK
+     * must redact: as is; JSON-escaped with Gson's HTML-safe escapes (`\u003c`),
+     * without them, and either way with `/` as a backslash and a slash (PHP); and
+     * each of those URL-encoded with a space as `+` and as `%20`.
+     */
+    private fun forms(secret: String): List<String> {
+        val plain = GsonBuilder().disableHtmlEscaping().create().toJson(secret)
+        val bases = mutableListOf(secret)
+        for (quoted in listOf(json(secret), plain)) {
+            val inner = quoted.substring(1, quoted.length - 1)
+            bases.add(inner)
+            bases.add(inner.replace("/", "\\/"))
+        }
+        return bases.flatMap { base ->
+            val encoded = URLEncoder.encode(base, "UTF-8")
+            listOf(base, encoded, encoded.replace("+", "%20"))
+        }
+    }
+
+    @Test
+    fun everySpellingOfTheTestSecretsIsDistinct() {
+        for (secret in listOf(key, password)) {
+            val forms = forms(secret)
+            assertEquals(forms.toString(), 15, forms.toSet().size)
+        }
+    }
+
+    /** Each spelling alone is replaced, with nothing of it left around the ***. */
+    @Test
+    fun eachSpellingOfASecretIsRedactedWhole() {
+        for (secret in listOf(key, password)) {
+            for (form in forms(secret)) {
+                assertEquals(form, "[***]", redactSecrets("[$form]", listOf(secret)))
+            }
+        }
+    }
+
+    /**
+     * A 400 whose plain-text body quotes the key in every spelling of [forms],
+     * and on testSmtpConfiguration the SMTP password in every spelling too: each
+     * is redacted on every path, so dropping any one spelling from the SDK fails
+     * this test. The quote reaches the message, redacted, on every path.
+     */
+    @Test
+    fun everySpellingOfASecretInAnErrorBodyIsRedacted() {
+        val quote: (Request) -> String = {
+            "Bad request: " + forms(if (it.url.encodedPath.contains("test-smtp")) password else key).joinToString(" | ")
+        }
+        sweep("400-forms", answering(400, "text/plain", quote), everyCallFails = true) { outcome ->
+            outcome.errors.firstOrNull()?.errors.toString().contains("Bad request: *** | ***")
+        }
+    }
+
     private fun leaks(text: String, secret: String): Boolean {
-        if (text.contains(secret) || text.contains(URLEncoder.encode(secret, "UTF-8"))) return true
-        if (jsonForms(secret).any { text.contains(it) }) return true
+        if (forms(secret).any { text.contains(it) }) return true
         return try {
             URLDecoder.decode(text, "UTF-8").contains(secret)
         } catch (_: IllegalArgumentException) {
@@ -94,7 +149,12 @@ class OfflineRedactionSweepTest {
             .body(body(request).toResponseBody(contentType.toMediaType())).build()
     }
 
-    private fun sweep(label: String, interceptor: Interceptor, everyCallFails: Boolean) {
+    private fun sweep(
+        label: String,
+        interceptor: Interceptor,
+        everyCallFails: Boolean,
+        quoted: (RequestSweep.Outcome) -> Boolean = { true },
+    ) {
         val sweep = RequestSweep(context, dir, csv)
         val client = ZeroBounceClient()
         client.transportInterceptor = interceptor
@@ -115,6 +175,9 @@ class OfflineRedactionSweepTest {
             }
             if (everyCallFails && (outcome.successes.isNotEmpty() || outcome.errors.size != 1)) {
                 failures.add("$label expected one error: $outcome")
+            }
+            if (!quoted(outcome)) {
+                failures.add("$label did not quote the body: $outcome")
             }
             for (error in outcome.errors) {
                 val text = "${error?.errors} $error"
@@ -178,11 +241,11 @@ class OfflineRedactionSweepTest {
 
     /**
      * Every spelling of the key, and for testSmtpConfiguration of the SMTP
-     * password, which only Warmup holds: as sent, URL-encoded and JSON-escaped.
+     * password, which only Warmup holds: every one of [forms].
      */
     private fun spellings(request: Request): String {
         val secrets = if (request.url.encodedPath.contains("test-smtp-configuration")) listOf(key, password) else listOf(key)
-        return secrets.joinToString(" ") { "$it ${URLEncoder.encode(it, "UTF-8")} ${json(it)} ${phpJson(it)}" }
+        return secrets.joinToString(" ") { forms(it).joinToString(" ") }
     }
 
     /**
