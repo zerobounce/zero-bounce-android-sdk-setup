@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A response body cut short (fewer bytes than its `Content-Length`, or the connection closed mid-body) reaches the error callback with status 0. In 3.0.1 OkHttp threw while the SDK read the body inside its response callback, where OkHttp only logs an exception, so neither callback ran: every call that reads a JSON body (every `ZeroBounceSDK` and `ZeroBounceClient` call except the file downloads) and every `ZeroBounceWarmup` call waited forever. The downloads already reported it and deleted the partial file.
+- A transport error never carries the API key. In 3.0.1 the error callback got the exception's message as it was, so a message that quoted the request URL, or the key itself, passed it on (the key was redacted only in debug logs). The key is now replaced with `***` wherever it appears, whether the request carried it in the URL, a form or multipart field, the JSON body or the Inbox Placement Tester's `Authorization` header.
+- `initialize(apiKey, apiBaseUrl)` changes nothing when it throws `IllegalArgumentException` for a base URL that is not https. In 3.0.1 it stored the new key and client first, so a caller that caught the exception sent the new key to the old base URL.
+- Repository only: tests send every public request method of `ZeroBounceClient` and `ZeroBounceWarmup`, found by reflection, to a real HTTP server on a loopback socket and fail if a body cut short does not reach the error callback with status 0 (or a download leaves a partial file), if a 301, 302, 303, 307 or 308 with a `Location` is followed or not reported with its status, if any request goes out on a client without connect, read and write timeouts or one that follows redirects, or if a transport error carries the key. The request-method list is shared with the HTTPS sweep and covers `ZeroBounceWarmup` too.
+
 ## [3.0.1] - 2026-11-11
 
 ### Changed

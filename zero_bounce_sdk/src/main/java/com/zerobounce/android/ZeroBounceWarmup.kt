@@ -712,7 +712,15 @@ class ZeroBounceWarmup {
             override fun onResponse(call: Call, response: Response) {
                 val contentType = response.header("Content-Type")
                     ?: response.body?.contentType()?.toString().orEmpty()
-                val text = response.body?.string().orEmpty()
+                // A body cut short throws here, inside OkHttp's onResponse,
+                // where OkHttp would only log it: report it as a transport
+                // failure (status 0) instead.
+                val text = try {
+                    response.body.string()
+                } catch (e: IOException) {
+                    errorCallback(ErrorResponse(errors = arrayListOf(redact(e.message, secrets))))
+                    return
+                }
                 if (response.code in 300..399) {
                     errorCallback(
                         ErrorResponse(
