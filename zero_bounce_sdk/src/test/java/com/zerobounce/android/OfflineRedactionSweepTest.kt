@@ -155,6 +155,68 @@ class OfflineRedactionSweepTest {
     }
 
     /**
+     * Sweeps every public Warmup request method against a server that answers
+     * HTTP 200 with a body Warmup must refuse, and checks that each call reports
+     * one error with status 200 that carries neither the key nor the SMTP
+     * password in any form.
+     */
+    private fun warmupSweep(label: String, interceptor: Interceptor) {
+        val sweep = RequestSweep(context, dir, csv)
+        val warmup = ZeroBounceWarmup()
+        warmup.transportInterceptor = interceptor
+        warmup.initialize(key)
+        val failures = mutableListOf<String>()
+        val methods = RequestSweep.requestMethods(ZeroBounceWarmup::class.java)
+        for (method in methods) {
+            val outcome = sweep.invoke(warmup, method)
+            if (outcome.thrown != null || outcome.timedOut || outcome.successes.isNotEmpty() ||
+                outcome.errors.size != 1 || outcome.errors[0]?.statusCode != 200
+            ) {
+                failures.add("$label expected one error with status 200: $outcome")
+            }
+            for (error in outcome.errors) {
+                val text = "${error?.errors} $error"
+                if (leaks(text, key) || leaks(text, password)) {
+                    failures.add("$label leaked a secret: $outcome")
+                }
+            }
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+        assertEquals("every Warmup sweep entry was invoked", sweep.warmupArgs.size, methods.size)
+    }
+
+    /**
+     * Warmup builds an error from a 200 body in two places: a JSON call answered
+     * with text that is not JSON, and a CSV download answered with JSON. Both
+     * bodies here quote the key and the request (URL, API-Key header, body with
+     * the SMTP password).
+     */
+    @Test
+    fun aWarmupErrorBuiltFromA200BodyNeverCarriesTheKey() {
+        warmupSweep("warmup-200", Interceptor { chain ->
+            val request = chain.request()
+            val download = request.url.encodedPath.contains("/download")
+            val body = if (download) {
+                "{\"error\": ${json("Invalid API key $key for ${echo(request)}")}}"
+            } else {
+                "Invalid API key $key for ${echo(request)}"
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body.toResponseBody((if (download) "application/json" else "text/plain").toMediaType()))
+                .build()
+        })
+    }
+
+    /** An HTML page on a 200 whose title quotes the key, from every Warmup call. */
+    @Test
+    fun aWarmupHtmlPageOnA200NeverCarriesTheKey() {
+        warmupSweep("warmup-html", answering(200, "text/html") {
+            "<!DOCTYPE html><html><head><title>Denied $key ${URLEncoder.encode(key, "UTF-8")}</title></head>" +
+                "<body>${echo(it)}</body></html>"
+        })
+    }
+
+    /**
      * The account-level batch error ("all") is read from a decoded 200 body, after
      * the request helper has handed it on, and is redacted as well.
      */

@@ -127,6 +127,12 @@ class ZeroBounceWarmup {
      * has ZeroBounce provision it and takes `emailContent` and
      * `managedSending`; a 200 means accepted, and the mailbox is provisioned
      * afterwards.
+     *
+     * The zb_managed body is `email_content` (`company_name`, `company_website`,
+     * `company_description`, `types_of_emails`, `example_email`) and
+     * `managed_sending` (`weekdays_only`, `timezone`, `timezone_offset`,
+     * `warmup_start_date`), as documented at
+     * https://www.zerobounce.net/docs/warmup-api/adding-a-sending-account.
      */
     @JvmOverloads
     fun addSendingAccount(
@@ -162,29 +168,46 @@ class ZeroBounceWarmup {
         options.ignoreConflict?.let { body["ignore_conflict"] = it }
 
         options.emailContent?.let { content ->
-            val payload = linkedMapOf<String, Any?>()
-            if (content.typesOfEmails.isNotEmpty()) {
-                for (kind in content.typesOfEmails) {
-                    if (kind !in EMAIL_TYPES) {
-                        errorCallback(
-                            ErrorResponse.parseError(
-                                "types_of_emails must be transactional, newsletter and/or marketing",
-                            ),
-                        )
-                        return
-                    }
+            for (kind in content.typesOfEmails) {
+                if (kind !in EMAIL_TYPES) {
+                    errorCallback(
+                        ErrorResponse.parseError(
+                            "types_of_emails must be transactional, newsletter and/or marketing",
+                        ),
+                    )
+                    return
                 }
-                payload["types_of_emails"] = content.typesOfEmails
             }
-            content.industry?.let { payload["industry"] = it }
+            val payload = linkedMapOf<String, Any?>()
             content.companyName?.let { payload["company_name"] = it }
-            content.website?.let { payload["website"] = it }
+            // Up to 3.0.1 the website was sent as "website", which the API
+            // does not read; it now goes out as company_website. industry is
+            // not an API field and is not sent.
+            @Suppress("DEPRECATION")
+            (content.companyWebsite ?: content.website)?.let { payload["company_website"] = it }
+            content.companyDescription?.let { payload["company_description"] = it }
+            if (content.typesOfEmails.isNotEmpty()) payload["types_of_emails"] = content.typesOfEmails
+            content.exampleEmail?.let { payload["example_email"] = it }
             body["email_content"] = payload
         }
         options.managedSending?.let { sending ->
             val payload = linkedMapOf<String, Any?>()
-            sending.timezoneOffset?.let {
-                if (outOfRange(it, -11, 14, "timezone_offset", errorCallback)) return
+            sending.weekdaysOnly?.let { payload["weekdays_only"] = it }
+            sending.timezone?.let { payload["timezone"] = it }
+            @Suppress("DEPRECATION")
+            val wholeHours = sending.timezoneOffset
+            if (wholeHours != null && sending.timezoneOffsetHours != null) {
+                errorCallback(
+                    ErrorResponse.parseError("set timezoneOffsetHours or timezoneOffset, not both"),
+                )
+                return
+            }
+            (sending.timezoneOffsetHours ?: wholeHours?.toDouble())?.let {
+                // -11 to 14 hours, whole or fractional (5.5, 3.0); NaN fails both tests.
+                if (!(it >= -11.0 && it <= 14.0)) {
+                    errorCallback(ErrorResponse.parseError("timezone_offset must be -11 to 14"))
+                    return
+                }
                 payload["timezone_offset"] = it
             }
             sending.warmupStartDate?.let {
@@ -194,7 +217,7 @@ class ZeroBounceWarmup {
                 }
                 payload["warmup_start_date"] = it
             }
-            sending.dailyLimit?.let { payload["daily_limit"] = it }
+            // daily_limit is not applied by the API and is not sent.
             body["managed_sending"] = payload
         }
 
@@ -785,6 +808,10 @@ class ZeroBounceWarmup {
         send("GET", path, query, null, emptyList(), errorCallback) { statusCode, contentType, text ->
             if (text.isBlank() || contentType.lowercase().contains("application/json")) {
                 errorCallback(redacted(httpError(statusCode, text), emptyList()))
+            } else if (looksLikeHtml(text) || contentType.lowercase().contains("text/html")) {
+                // An HTML page on a 200 (a proxy's or Cloudflare's block page)
+                // is not a CSV, whether its content type or its body gives it away.
+                errorCallback(redacted(htmlPageError(statusCode, text), emptyList()))
             } else {
                 responseCallback(text)
             }
@@ -792,22 +819,53 @@ class ZeroBounceWarmup {
     }
 }
 
-/** What ZeroBounce should send on your behalf, for zb_managed onboarding. */
-data class ZBWarmupEmailContent(
+/**
+ * The company context ZeroBounce uses to write warmup content, for zb_managed
+ * onboarding. Only the fields that are set are sent.
+ */
+data class ZBWarmupEmailContent @JvmOverloads constructor(
     /** Any of transactional, newsletter, marketing. */
     val typesOfEmails: List<String> = emptyList(),
+    /** Not an API field: it is not sent. */
+    @Deprecated("The API does not read an industry; describe the company with companyDescription.")
     val industry: String? = null,
     val companyName: String? = null,
+    /** Sent as company_website, unless [companyWebsite] is set too. */
+    @Deprecated("Use companyWebsite.", ReplaceWith("companyWebsite"))
     val website: String? = null,
+    /** The company's website, e.g. https://example.com. */
+    val companyWebsite: String? = null,
+    /** What the company does, in a sentence or two. */
+    val companyDescription: String? = null,
+    /** A sample of the mail you send, as a model for the warmup content. */
+    val exampleEmail: String? = null,
 )
 
-/** When ZeroBounce should send, for zb_managed onboarding. */
-data class ZBWarmupManagedSending(
-    /** -11 to 14. */
+/**
+ * When ZeroBounce should send, for zb_managed onboarding. Write-only: the API
+ * has no endpoint to read it back. Only the fields that are set are sent.
+ */
+data class ZBWarmupManagedSending @JvmOverloads constructor(
+    /** Whole hours from UTC, -11 to 14. */
+    @Deprecated(
+        "The API takes fractional offsets; use timezoneOffsetHours.",
+        ReplaceWith("timezoneOffsetHours"),
+    )
     val timezoneOffset: Int? = null,
     /** YYYY-MM-DD. */
     val warmupStartDate: String? = null,
+    /** Not sent: the API does not apply a daily limit to zb_managed accounts. */
+    @Deprecated("The API does not apply a daily limit to zb_managed accounts.")
     val dailyLimit: Int? = null,
+    /** Send on Monday to Friday only. */
+    val weekdaysOnly: Boolean? = null,
+    /** An IANA time zone name, e.g. Europe/Bucharest. */
+    val timezone: String? = null,
+    /**
+     * Hours from UTC, -11.0 to 14.0, whole or fractional (5.5 for India). Sent
+     * as timezone_offset; set this or the deprecated [timezoneOffset], not both.
+     */
+    val timezoneOffsetHours: Double? = null,
 )
 
 /** The optional arguments of [ZeroBounceWarmup.addSendingAccount]. */

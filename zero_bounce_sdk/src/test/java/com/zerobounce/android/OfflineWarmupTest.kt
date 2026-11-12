@@ -288,6 +288,7 @@ class OfflineWarmupTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun addSendingAccountChecksTheZbManagedPayload() {
         val badTypes = await<JsonElement> { ok, err ->
             warmup.addSendingAccount(
@@ -347,6 +348,119 @@ class OfflineWarmupTest {
         assertEquals(
             "2026-03-04",
             body["managed_sending"].asJsonObject["warmup_start_date"].asString,
+        )
+    }
+
+    private fun addZbManaged(options: ZBWarmupAddSendingAccountOptions) = await<JsonElement> { ok, err ->
+        warmup.addSendingAccount("a@b.com", "zb_managed", options, ok, err)
+    }
+
+    /**
+     * The zb_managed body has exactly the documented fields
+     * (https://www.zerobounce.net/docs/warmup-api/adding-a-sending-account).
+     */
+    @Test
+    fun addSendingAccountSendsTheDocumentedZbManagedBody() {
+        addZbManaged(
+            ZBWarmupAddSendingAccountOptions(
+                emailContent = ZBWarmupEmailContent(
+                    companyName = "Acme",
+                    companyWebsite = "https://acme.example",
+                    companyDescription = "B2B email tools",
+                    typesOfEmails = listOf("marketing", "newsletter"),
+                    exampleEmail = "Hi, short intro to Acme.",
+                ),
+                managedSending = ZBWarmupManagedSending(
+                    weekdaysOnly = true,
+                    timezone = "Asia/Kolkata",
+                    timezoneOffsetHours = 5.5,
+                    warmupStartDate = "2026-03-04",
+                ),
+            ),
+        )
+        assertEquals(
+            """{"from_address":"a@b.com","onboarding_model":"zb_managed",""" +
+                """"email_content":{"company_name":"Acme","company_website":"https://acme.example",""" +
+                """"company_description":"B2B email tools","types_of_emails":["marketing","newsletter"],""" +
+                """"example_email":"Hi, short intro to Acme."},""" +
+                """"managed_sending":{"weekdays_only":true,"timezone":"Asia/Kolkata",""" +
+                """"timezone_offset":5.5,"warmup_start_date":"2026-03-04"}}""",
+            onlyRequest().body,
+        )
+
+        addZbManaged(ZBWarmupAddSendingAccountOptions(managedSending = ZBWarmupManagedSending(weekdaysOnly = false)))
+        assertEquals(
+            """{"from_address":"a@b.com","onboarding_model":"zb_managed","managed_sending":{"weekdays_only":false}}""",
+            onlyRequest().body,
+        )
+    }
+
+    /** Whole and fractional hours from -11 to 14 go out as numbers; anything else is refused. */
+    @Test
+    fun addSendingAccountTakesFractionalTimezoneOffsets() {
+        for (offset in listOf(5.5, 3.0, -11.0, 14.0, -3.5, 5.75)) {
+            val outcome = addZbManaged(
+                ZBWarmupAddSendingAccountOptions(managedSending = ZBWarmupManagedSending(timezoneOffsetHours = offset)),
+            )
+            assertNull(outcome.errorText())
+            val sent = onlyRequest().json()!!["managed_sending"].asJsonObject["timezone_offset"]
+            assertEquals(offset, sent.asDouble, 0.0)
+        }
+        addZbManaged(ZBWarmupAddSendingAccountOptions(managedSending = ZBWarmupManagedSending(timezoneOffsetHours = 3.0)))
+        assertTrue(onlyRequest().body.contains("\"timezone_offset\":3.0"))
+
+        for (offset in listOf(-11.5, 14.5, -12.0, 15.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            val outcome = addZbManaged(
+                ZBWarmupAddSendingAccountOptions(managedSending = ZBWarmupManagedSending(timezoneOffsetHours = offset)),
+            )
+            assertEquals("offset $offset", "timezone_offset must be -11 to 14", outcome.errorText())
+        }
+        @Suppress("DEPRECATION")
+        val both = addZbManaged(
+            ZBWarmupAddSendingAccountOptions(
+                managedSending = ZBWarmupManagedSending(timezoneOffset = 3, timezoneOffsetHours = 3.5),
+            ),
+        )
+        assertTrue(both.errorText().orEmpty().contains("not both"))
+        assertEquals("a refused offset sends nothing", 0, fake.size())
+    }
+
+    /**
+     * Callers of 3.0.1's fields still compile: website goes out as
+     * company_website (company_website wins when both are set), the whole-hour
+     * timezoneOffset as timezone_offset, and industry and daily_limit, which the
+     * API does not read, are left out.
+     */
+    @Test
+    @Suppress("DEPRECATION")
+    fun addSendingAccountMapsTheOldFieldsToTheDocumentedOnes() {
+        addZbManaged(
+            ZBWarmupAddSendingAccountOptions(
+                emailContent = ZBWarmupEmailContent(
+                    listOf("marketing"), "Software", "Acme", "https://old.example",
+                ),
+                managedSending = ZBWarmupManagedSending(-5, "2026-03-04", 50),
+            ),
+        )
+        assertEquals(
+            """{"from_address":"a@b.com","onboarding_model":"zb_managed",""" +
+                """"email_content":{"company_name":"Acme","company_website":"https://old.example",""" +
+                """"types_of_emails":["marketing"]},""" +
+                """"managed_sending":{"timezone_offset":-5.0,"warmup_start_date":"2026-03-04"}}""",
+            onlyRequest().body,
+        )
+
+        addZbManaged(
+            ZBWarmupAddSendingAccountOptions(
+                emailContent = ZBWarmupEmailContent(
+                    website = "https://old.example",
+                    companyWebsite = "https://new.example",
+                ),
+            ),
+        )
+        assertEquals(
+            "https://new.example",
+            onlyRequest().json()!!["email_content"].asJsonObject["company_website"].asString,
         )
     }
 
@@ -461,6 +575,35 @@ class OfflineWarmupTest {
         fake.replyWith(200, "application/json", """{"message":"No statistics for this address."}""")
         val outcome = awaitText { ok, err -> warmup.downloadSeeds(ok, err) }
         assertTrue(outcome.errorText().orEmpty().contains("No statistics for this address."))
+    }
+
+    /**
+     * An HTML page served on a 200 (a proxy's or Cloudflare's block page) is an
+     * error with status 200 from both CSV downloads, by its content type or by
+     * its look, never a CSV; the page's title is redacted like any body text.
+     */
+    @Test
+    fun anHtmlPageInPlaceOfACsvIsAnError() {
+        val page = "<!DOCTYPE html><html><head><title>Denied for $apiKey</title></head><body>blocked</body></html>"
+        val answers = listOf(
+            page to "text/html; charset=utf-8",
+            page to "text/csv",
+            "<html><body>blocked</body></html>" to "application/octet-stream",
+            "seed,provider" to "text/html",
+        )
+        for ((body, contentType) in answers) {
+            for (download in 0..1) {
+                fake.clear()
+                fake.replyWith(200, contentType, body)
+                val outcome = awaitText { ok, err ->
+                    if (download == 0) warmup.downloadSeeds(ok, err) else warmup.downloadStatistics("a@b.com", ok, err)
+                }
+                assertNull("$contentType ${outcome.value}", outcome.value)
+                assertEquals("$contentType ${outcome.errorText()}", 200, outcome.error?.statusCode)
+                assertTrue(outcome.errorText().orEmpty(), outcome.errorText().orEmpty().contains("HTML"))
+                assertTrue(outcome.errorText().orEmpty(), !outcome.errorText().orEmpty().contains(apiKey))
+            }
+        }
     }
 
     @Test
@@ -585,7 +728,7 @@ internal class WarmupRequest(
     val path: String,
     val apiKeyHeader: String,
     val query: Map<String, String>,
-    private val body: String,
+    val body: String,
 ) {
     fun json(): com.google.gson.JsonObject? =
         if (body.isBlank()) null else JsonParser.parseString(body).asJsonObject

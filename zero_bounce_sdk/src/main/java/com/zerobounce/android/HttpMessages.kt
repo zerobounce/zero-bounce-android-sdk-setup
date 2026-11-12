@@ -65,15 +65,7 @@ internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
             statusCode = statusCode,
         )
     }
-    if (looksLikeHtml(body.orEmpty())) {
-        val title = htmlTitle(body.orEmpty())
-        val message = if (title.isEmpty()) {
-            "ZeroBounce returned an HTML error page instead of an API response."
-        } else {
-            "ZeroBounce returned an HTML error page (\"$title\") instead of an API response."
-        }
-        return ErrorResponse(errors = arrayListOf(message), statusCode = statusCode)
-    }
+    if (looksLikeHtml(body.orEmpty())) return htmlPageError(statusCode, body.orEmpty())
     if (text.startsWith("{") || text.startsWith("[")) {
         cloudflareTitle(text)?.let { title ->
             return ErrorResponse(errors = arrayListOf(stripErrorPrefix(title)), statusCode = statusCode)
@@ -96,6 +88,17 @@ internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
     }
     val message = stripErrorPrefix(text).ifEmpty {
         "Empty response from ZeroBounce (HTTP $statusCode)"
+    }
+    return ErrorResponse(errors = arrayListOf(message), statusCode = statusCode)
+}
+
+/** An HTML page in place of an API response, named by its title when it has one. */
+internal fun htmlPageError(statusCode: Int, body: String): ErrorResponse {
+    val title = htmlTitle(body)
+    val message = if (title.isEmpty()) {
+        "ZeroBounce returned an HTML error page instead of an API response."
+    } else {
+        "ZeroBounce returned an HTML error page (\"$title\") instead of an API response."
     }
     return ErrorResponse(errors = arrayListOf(message), statusCode = statusCode)
 }
