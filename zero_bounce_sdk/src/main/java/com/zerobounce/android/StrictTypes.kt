@@ -2,6 +2,7 @@ package com.zerobounce.android
 
 import com.google.gson.Gson
 import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.google.gson.JsonParseException
 import com.google.gson.JsonParser
 import com.google.gson.TypeAdapter
@@ -46,6 +47,30 @@ internal object StrictTypes {
     }
 
     /**
+     * A field the API sends as a number or as a string holding one (`Credits`):
+     * a JSON number or string, kept as its text; a boolean, an array or an object
+     * is an error. Whether the text is a whole number is checked by [requireFields].
+     */
+    internal class TextOrNumber : TypeAdapter<String?>() {
+        override fun write(out: JsonWriter, value: String?) {
+            out.value(value)
+        }
+
+        override fun read(reader: JsonReader): String? = when (val token = reader.peek()) {
+            JsonToken.NULL -> {
+                reader.nextNull()
+                null
+            }
+            JsonToken.STRING, JsonToken.NUMBER -> reader.nextString()
+            else -> {
+                val path = reader.path
+                reader.skipValue()
+                throw wrongType(path, token, "a number")
+            }
+        }
+    }
+
+    /**
      * Enums (status, sub-status): a JSON string or null, Gson's own reading of the
      * string kept. Maps (batch error rows): a JSON object or null, not the array
      * of pairs Gson would otherwise also read as a map.
@@ -75,35 +100,57 @@ internal object StrictTypes {
     }
 
     /**
-     * The fields a call cannot answer without: getCredits' `Credits` is a string
-     * holding an integer, and validate's `address` and `status` are strings
-     * (except in the greylist answer, which carries `Message` instead of a result).
+     * The fields a call cannot answer without: getCredits' `Credits` is a whole
+     * number, sent as a JSON string (`"-1"`, `"12345"`) or a JSON integer
+     * (`2375323`); validate's `address` and `status` are strings (except in the
+     * greylist answer, which carries `Message` instead of a result); and every
+     * validatebatch row is an object with `address` and `status` as strings.
      *
      * @throws StrictTypeException when [body] is not a [type] result
      */
     fun requireFields(type: Class<*>, body: String) {
-        if (type != ZBCreditsResponse::class.java && type != ZBValidateResponse::class.java) return
+        if (type != ZBCreditsResponse::class.java && type != ZBValidateResponse::class.java &&
+            type != ZBValidateBatchResponse::class.java
+        ) return
         val parsed = JsonParser.parseString(body)
         if (!parsed.isJsonObject) return
         val obj = parsed.asJsonObject
         if (type == ZBCreditsResponse::class.java) {
             val credits = obj.get("Credits")
-            if (credits == null || !credits.isJsonPrimitive || !credits.asJsonPrimitive.isString ||
+            if (credits == null || !credits.isJsonPrimitive ||
                 !INTEGER.matches(credits.asString)
             ) {
                 throw StrictTypeException(
-                    "ZeroBounce returned ${kind(credits)} for Credits, which is not a string holding a whole number."
+                    "ZeroBounce returned ${kind(credits)} for Credits, which is not a whole number."
                 )
+            }
+            return
+        }
+        if (type == ZBValidateBatchResponse::class.java) {
+            val rows = obj.get("email_batch")
+            if (rows == null || !rows.isJsonArray) return
+            for (row in rows.asJsonArray) {
+                if (!row.isJsonObject) {
+                    throw StrictTypeException(
+                        "ZeroBounce returned ${kind(row)} for a row of email_batch, which is not an object."
+                    )
+                }
+                requireStrings(row.asJsonObject, "email_batch row ")
             }
             return
         }
         // The greylist answer: a result that may carry nothing but Message (or
         // the address with it) while the retry is still running.
         if (obj.has("Message")) return
+        requireStrings(obj, "")
+    }
+
+    /** Throws unless [obj] has `address` and `status` as strings. */
+    private fun requireStrings(obj: JsonObject, where: String) {
         for (field in listOf("address", "status")) {
             val value = obj.get(field)
             if (value == null || !value.isJsonPrimitive || !value.asJsonPrimitive.isString) {
-                throw StrictTypeException("ZeroBounce returned ${kind(value)} for $field, which is not a string.")
+                throw StrictTypeException("ZeroBounce returned ${kind(value)} for $where$field, which is not a string.")
             }
         }
     }

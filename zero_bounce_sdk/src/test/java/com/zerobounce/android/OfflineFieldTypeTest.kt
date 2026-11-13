@@ -6,6 +6,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.whenever
@@ -33,9 +34,10 @@ import java.util.Date
  * Field types are part of the shape (check E7, standard.md section 3): on a typed
  * call, a field that arrives with a JSON type other than the documented one is an
  * API error with status 200, never coerced (`true` read as `"true"`), defaulted or
- * dropped. `getCredits` needs `Credits` as a string holding an integer, and
- * `validate` needs `address` and `status` as strings. Every documented example
- * response still decodes.
+ * dropped. `getCredits` needs `Credits` as a whole number (a JSON string or a
+ * JSON integer), `validate` and every `validateBatch` row need `address` and
+ * `status` as strings, and a JSON array is not an object. Every example response
+ * still decodes.
  */
 class OfflineFieldTypeTest {
 
@@ -164,9 +166,12 @@ class OfflineFieldTypeTest {
      * JSON values of the wrong type for a field of [type]. A list also gets each
      * wrong element, and a model each of its own fields wrong, one at a time.
      */
-    private fun wrongValues(type: Type): List<JsonElement> {
+    private fun wrongValues(type: Type, field: Field? = null): List<JsonElement> {
         val raw = rawClass(type)
         val wrong = when {
+            // Credits is a number or a string holding one, so a number is not wrong there.
+            raw == String::class.java && field?.getAnnotation(JsonAdapter::class.java) != null ->
+                listOf("true", "[]", "[5]", "{}")
             raw == String::class.java -> listOf("true", "5", "[]", "[5]", "{}")
             raw.isEnum -> listOf("5", "true", "[]", "{}")
             raw == java.lang.Boolean::class.java || raw == java.lang.Boolean.TYPE -> listOf("\"yes\"", "[]", "{}")
@@ -192,7 +197,7 @@ class OfflineFieldTypeTest {
 
     private fun nestedWrongObjects(model: Class<*>): List<JsonElement> =
         modelFields(model).flatMap { field ->
-            wrongValues(field.genericType).map { value -> JsonObject().apply { add(jsonName(field), value) } }
+            wrongValues(field.genericType, field).map { value -> JsonObject().apply { add(jsonName(field), value) } }
         }
 
     /**
@@ -213,7 +218,7 @@ class OfflineFieldTypeTest {
             // The base alone is a valid answer, so each failure below is the wrong field's.
             run(methods, if (list) "[$base]" else base, expectSuccess(failures))
             for (field in modelFields(model)) {
-                for (value in wrongValues(field.genericType)) {
+                for (value in wrongValues(field.genericType, field)) {
                     val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), value) }
                     run(methods, if (list) "[$body]" else body.toString(), expectError(failures))
                     bodies++
@@ -233,16 +238,58 @@ class OfflineFieldTypeTest {
         assertTrue("validate overloads: $validate", validate.isNotEmpty())
         val failures = mutableListOf<String>()
         for (body in listOf(
-            "{}", "{\"Credits\":null}", "{\"Credits\":true}", "{\"Credits\":5}", "{\"Credits\":-1}",
-            "{\"Credits\":\"abc\"}", "{\"Credits\":\"5.0\"}", "{\"Credits\":\"\"}", "{\"Credits\":1.5}",
-            "{\"Credits\":[\"5\"]}",
+            "{}", "{\"Credits\":null}", "{\"Credits\":true}", "{\"Credits\":5.5}", "{\"Credits\":5.0}",
+            "{\"Credits\":1e3}", "{\"Credits\":\"abc\"}", "{\"Credits\":\"5.0\"}", "{\"Credits\":\"\"}",
+            "{\"Credits\":1.5}", "{\"Credits\":[\"5\"]}", "{\"Credits\":[5]}", "{\"Credits\":{}}",
         )) run(credits, body, expectError(failures))
         for (body in listOf(
             "{\"address\":true,\"status\":\"valid\"}", "{\"address\":\"a@b.c\",\"status\":5}",
             "{\"address\":\"a@b.c\"}", "{\"status\":\"valid\"}", "{\"address\":null,\"status\":\"valid\"}",
             "{\"address\":\"a@b.c\",\"status\":null}", "{\"address\":\"a@b.c\",\"status\":\"valid\",\"sub_status\":7}", "{}",
         )) run(validate, body, expectError(failures))
-        for (body in listOf("{\"Credits\":\"-1\"}", "{\"Credits\":\"12345\"}")) run(credits, body, expectSuccess(failures))
+        // Credits is an integer sent as a JSON string (the live API) or as a JSON
+        // integer (zerobounce.net's own example, {"Credits":2375323}).
+        for (body in listOf(
+            "{\"Credits\":\"-1\"}", "{\"Credits\":\"12345\"}", "{\"Credits\":2375323}", "{\"Credits\":-1}",
+            "{\"Credits\":0}", "{\"Credits\":2147483647}",
+        )) run(credits, body, expectSuccess(failures))
+        // Every validatebatch row is an object with address and status as strings.
+        val batch = typedMethods().filter { responseType(it) == ZBValidateBatchResponse::class.java }
+        assertTrue("validateBatch overloads", batch.isNotEmpty())
+        for (row in listOf(
+            "{\"status\":\"valid\"}", "{\"address\":\"a@b.c\"}", "{}", "{\"address\":null,\"status\":\"valid\"}",
+            "{\"address\":\"a@b.c\",\"status\":null}", "{\"address\":true,\"status\":\"valid\"}",
+            "{\"address\":\"a@b.c\",\"status\":5}", "{\"Message\":\"Greylist validation still in progress.\"}",
+            "5", "null", "\"x\"", "[]",
+        )) {
+            run(batch, "{\"email_batch\":[$row]}", expectError(failures))
+            run(batch, "{\"email_batch\":[{\"address\":\"ok@b.c\",\"status\":\"valid\"},$row]}", expectError(failures))
+        }
+        run(batch, "{\"email_batch\":[{\"address\":\"a@b.c\",\"status\":\"valid\"}]}", expectSuccess(failures))
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * A JSON array where the call's result is an object (check E7): an empty
+     * array, an array of one string and a positional array (values in field
+     * order) are an error with status 200 on every typed call. A call whose
+     * result is a list accepts the empty array, and still rejects the others.
+     */
+    @Test
+    fun anArrayInPlaceOfAnObjectIsAnErrorWithStatus200OnEveryTypedCall() {
+        val (lists, objects) = typedMethods().partition {
+            val type = responseType(it)
+            type is ParameterizedType && List::class.java.isAssignableFrom(type.rawType as Class<*>)
+        }
+        val failures = mutableListOf<String>()
+        for (body in listOf(
+            "[]", "[\"x\"]", "[\"a@example.com\",10]", "[true,\"3\"]", "[\"a@example.com\",\"valid\"]", "[[]]", "[{}]",
+        )) run(objects, body, expectError(failures))
+        for (body in listOf("[\"x\"]", "[\"a@example.com\",10]", "[true,\"3\"]", "[[]]", "[5]")) {
+            run(lists, body, expectError(failures))
+        }
+        if (lists.isNotEmpty()) run(lists, "[]", expectSuccess(failures))
+        assertTrue("object calls: ${objects.size}", objects.size > 40)
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
