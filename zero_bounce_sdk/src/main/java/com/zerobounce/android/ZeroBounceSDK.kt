@@ -115,11 +115,19 @@ object ZeroBounceSDK {
         .registerTypeAdapter(Date::class.java, GsonDateDeserializer())
         .registerTypeAdapter(Boolean::class.javaObjectType, StrictBooleanAdapter)
         .registerTypeAdapter(Boolean::class.java, StrictBooleanAdapter)
+        // Field types are part of the shape (E7): no string field takes a
+        // boolean, number, array or object, and no enum a non-string.
+        .registerTypeAdapter(String::class.java, StrictTypes.STRING)
+        .registerTypeAdapterFactory(StrictTypes.ENUMS_AND_MAPS)
         .create()
 
-    /** Decodes a typed result; a JSON `null` is not one (it is the wrong shape for the call). */
+    /**
+     * Decodes a typed result; a JSON `null` is not one (it is the wrong shape for
+     * the call), and getCredits and validate need their fields (E7).
+     */
     private inline fun <reified T : JSONConvertable> String.toObject(): T =
-        gson.fromJson(this, T::class.java) ?: throw WrongShapeException()
+        (gson.fromJson(this, T::class.java) ?: throw WrongShapeException())
+            .also { StrictTypes.requireFields(T::class.java, this) }
 
     /**
      * Initializes the SDK.
@@ -2135,7 +2143,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { gson.fromJson(it, responseClass) ?: throw WrongShapeException() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { (gson.fromJson(it, responseClass) ?: throw WrongShapeException()).also { _ -> StrictTypes.requireFields(responseClass, it) } }) {
                     responseCallback(it)
                 }
             }

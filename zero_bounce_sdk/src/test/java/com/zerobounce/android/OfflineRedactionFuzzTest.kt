@@ -176,6 +176,10 @@ class OfflineRedactionFuzzTest {
     /** A secret whose only special character is a space, so its URL spelling has no `%`. */
     private val spaced = "sp ace7"
 
+    /** Secrets with a 2-byte and a 3-byte UTF-8 character ([astral] has a 4-byte one). */
+    private val twoByte = "pw\u00e9x7"
+    private val threeByte = "pw\u20acx7"
+
     /**
      * Each decode step of the check on its own, so removing one fails here and not
      * only by chance in the random compositions: percent-decoding with lower-case hex
@@ -202,8 +206,14 @@ class OfflineRedactionFuzzTest {
             "NUL first" to "a\u0000b " + lowerHex(url20(key)),
             "%00 first" to "%00 " + lowerHex(url20(url20(key))),
             "%00 first, JSON" to "%00\\u0000 " + unicodeEscaped(key),
+            // Percent-decoding works on bytes, then reads them as UTF-8: one case per
+            // UTF-8 sequence length, so decoding each %XX as its own character fails here.
+            "2-byte UTF-8 under %" to lowerHex(url20(twoByte)),
+            "3-byte UTF-8 under %" to lowerHex(url20(threeByte)),
+            "4-byte UTF-8 under %" to lowerHex(url20(astral)),
+            "4-byte UTF-8 under two % layers" to lowerHex(url20(url20(astral))),
         )
-        val secrets = listOf(key, astral, spaced)
+        val secrets = listOf(key, astral, spaced, twoByte, threeByte)
         val failures = mutableListOf<String>()
         for ((name, encoded) in cases) {
             val body = "Bad request: $encoded (quoted)"

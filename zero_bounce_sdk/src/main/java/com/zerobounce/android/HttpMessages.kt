@@ -433,7 +433,7 @@ internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): Err
     if (cause is WrongShapeException) {
         return ErrorResponse(errors = arrayListOf(WRONG_SHAPE), statusCode = statusCode)
     }
-    if (cause is StrictBooleanException) {
+    if (cause is StrictBooleanException || cause is StrictTypeException) {
         return ErrorResponse(errors = arrayListOf(cause.message.orEmpty()), statusCode = statusCode)
     }
     return httpError(statusCode, body)

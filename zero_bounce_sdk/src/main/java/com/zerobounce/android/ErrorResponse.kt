@@ -61,8 +61,9 @@ data class ErrorResponse(
                 for ((key, value) in hashMap) {
                     if (key.contains("error") || key.contains("message")) {
                         if (value is ArrayList<*>) {
-                            val values = value as? ArrayList<String>
-                            values?.let { errors.addAll(it) }
+                            // Each item as text: {"error": [5]} holds a number,
+                            // which an unchecked cast would hand on as a "String".
+                            value.forEach { errors.add(it.toString()) }
                         } else if (value != null) {
                             errors.add(value.toString())
                         }
@@ -70,8 +71,7 @@ data class ErrorResponse(
                         if (key == "success" && value is Boolean) {
                             response.success = value
                         } else if (value is ArrayList<*>) {
-                            val values = value as? ArrayList<String>
-                            values?.let { otherMessages.addAll(it) }
+                            value.forEach { otherMessages.add(it.toString()) }
                         } else if (value != null) {
                             otherMessages.add(value.toString())
                         }

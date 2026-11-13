@@ -371,7 +371,7 @@ class OfflineCallbackTest {
             assertEquals(body, expected, value.catchallDomain)
         }
         val (value, _) = outcome<ZBValidateResponse> { ok, err ->
-            client(Canned(200, "application/json", """{"address":"a@example.com","catchall_domain":null}"""))
+            client(Canned(200, "application/json", """{"address":"a@example.com","status":"valid","catchall_domain":null}"""))
                 .validate("a@example.com", null, ok, err)
         }
         assertNull(value!!.catchallDomain)

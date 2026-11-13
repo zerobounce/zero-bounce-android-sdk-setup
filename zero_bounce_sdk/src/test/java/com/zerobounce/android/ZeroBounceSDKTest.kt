@@ -813,7 +813,7 @@ class ZeroBounceSDKTest {
         val countDownLatch = CountDownLatch(1)
 
         // Prepare mock response and add it to the server
-        val responseJson = "{\"Credits\":2375323}"
+        val responseJson = "{\"Credits\":\"2375323\"}"
         val expectedResponse = gson.fromJson(responseJson, ZBCreditsResponse::class.java)
         server.enqueue(MockResponse().setResponseCode(200).setBody(responseJson))
 
