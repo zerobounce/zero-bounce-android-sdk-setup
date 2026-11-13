@@ -1,5 +1,6 @@
 package com.zerobounce.android
 
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import java.util.*
 
@@ -10,6 +11,7 @@ data class ZBFileStatusResponse(
 
     private var success: Boolean = false,
 
+    @JsonAdapter(StrictTypes.TextOrListOfText::class)
     private var message: String? = null,
 
     @SerializedName("file_id")

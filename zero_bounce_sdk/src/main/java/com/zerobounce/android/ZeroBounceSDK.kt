@@ -1973,9 +1973,10 @@ object ZeroBounceSDK {
                     Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 }
 
-                // The email finder and domain search: see messageOnlyBody.
-                if (messageOnlyIsFailure && json != null && response.code <= 299 && messageOnlyBody(json)) {
-                    onError(httpError(response.code, json))
+                // The email finder and domain search: see messageOnlyError.
+                val messageOnly = if (messageOnlyIsFailure && response.code <= 299) messageOnlyError(response.code, json) else null
+                if (messageOnly != null) {
+                    onError(messageOnly)
                     return
                 }
                 acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }) {

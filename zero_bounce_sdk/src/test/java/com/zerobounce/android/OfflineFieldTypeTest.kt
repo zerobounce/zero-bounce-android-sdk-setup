@@ -120,10 +120,11 @@ class OfflineFieldTypeTest {
         body: String,
         check: (String, RequestSweep.Outcome) -> Unit,
         status: Int = 200,
+        contentType: String = "application/json",
     ) {
         val interceptor = Interceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(status).message("OK")
-                .body(body.toByteArray(Charsets.UTF_8).toResponseBody("application/json".toMediaType()))
+                .body(body.toByteArray(Charsets.UTF_8).toResponseBody(contentType.toMediaType()))
                 .build()
         }
         val sweep = RequestSweep(context, dir, csv)
@@ -223,10 +224,11 @@ class OfflineFieldTypeTest {
             run(methods, if (list) "[$base]" else base, expectSuccess(failures))
             for (field in modelFields(model)) {
                 for (value in wrongValues(field.genericType, field)) {
-                    if (model == ZBSendFileResponse::class.java && field.name == "message" &&
+                    if (model in listOf(ZBSendFileResponse::class.java, ZBDeleteFileResponse::class.java,
+                            ZBFileStatusResponse::class.java) && field.name == "message" &&
                         value.isJsonArray && value.asJsonArray.size() == 0
                     ) {
-                        // An upload's message may be an array of strings; an empty one is an empty message.
+                        // A file job's message may be an array of strings; an empty one is an empty message.
                         continue
                     }
                     val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), value) }
@@ -453,6 +455,195 @@ class OfflineFieldTypeTest {
                 failures.add("$body $outcome")
             }
         }, status = 400)
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * The non-null properties of a model, by name, with their declared type. Kotlin's
+     * nullability is not visible at run time, so the model's source is read (a header scan).
+     */
+    private fun nonNullProperties(model: Class<*>): Map<String, String> {
+        val source = File("src/main/java/com/zerobounce/android/${model.simpleName}.kt").readText()
+        val declared = Regex("""\b(?:val|var)\s+(\w+)\s*:\s*(List<[^>]*>|String|Boolean|Int)\s*[,)=\n]""")
+        return declared.findAll(source).associate { it.groupValues[1] to it.groupValues[2] }
+    }
+
+    private fun emptyValueOf(declared: String): Any = when (declared) {
+        "String" -> ""
+        "Boolean" -> false
+        "Int" -> 0
+        else -> emptyList<Any>()
+    }
+
+    private fun readField(target: Any, name: String): Any? {
+        val field = target.javaClass.getDeclaredField(name)
+        field.isAccessible = true
+        return field.get(target)
+    }
+
+    /**
+     * standard.md section 3: where the public type is not nullable, a JSON null reads as
+     * that type's empty value ("", false, 0, an empty list), never as null. Every non-null
+     * property of every typed model, and of the nested DomainFormat rows, is sent as null
+     * once and must read back as its empty value.
+     */
+    @Test
+    fun aNullInANonNullPropertyReadsAsItsEmptyValue() {
+        val documented = documented()
+        val failures = mutableListOf<String>()
+        var checks = 0
+        for ((type, methods) in typedMethods().groupBy { responseType(it) }) {
+            val list = type is ParameterizedType && type.rawType == List::class.java
+            val model = if (list) rawClass((type as ParameterizedType).actualTypeArguments[0]) else rawClass(type)
+            val base = documented[model]?.first() ?: "{}"
+            val declared = nonNullProperties(model)
+            for (field in modelFields(model)) {
+                val kind = declared[field.name] ?: continue
+                if (jsonName(field) in REQUIRED) continue
+                val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), JsonNull.INSTANCE) }
+                val expected = emptyValueOf(kind)
+                run(methods, if (list) "[$body]" else body.toString(), { sent, outcome ->
+                    val first = outcome.successes.singleOrNull()
+                    val decoded = if (first is List<*>) first.firstOrNull() else first
+                    val actual = decoded?.let { readField(it, field.name) }
+                    if (outcome.thrown != null || outcome.timedOut || outcome.errors.isNotEmpty() || actual != expected) {
+                        failures.add("$sent ${field.name} expected $expected got $actual $outcome")
+                    }
+                })
+                checks++
+            }
+        }
+        // The nested rows of the email finder and domain search answers.
+        val rowKind = nonNullProperties(DomainFormat::class.java)
+        val finders = typedMethods().filter {
+            responseType(it) == ZBFindDomainResponse::class.java || responseType(it) == ZBEmailFinderResponse::class.java
+        }
+        for (name in rowKind.keys) {
+            val row = JsonObject().apply { addProperty("format", "x"); addProperty("confidence", "x") }
+            row.add(name, JsonNull.INSTANCE)
+            run(finders, "{\"other_domain_formats\":[$row]}", { sent, outcome ->
+                val rows = outcome.successes.singleOrNull()?.let { readField(it, "otherDomainFormats") } as? List<*>
+                val actual = rows?.firstOrNull()?.let { readField(it, name) }
+                if (outcome.thrown != null || outcome.errors.isNotEmpty() || actual != emptyValueOf(rowKind.getValue(name))) {
+                    failures.add("$sent DomainFormat.$name got $actual $outcome")
+                }
+            })
+            checks++
+        }
+        assertTrue("null checks: $checks", checks > 20)
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * A file job's message is one string on every file-job answer (standard.md section 3):
+     * a list of strings is joined with a newline on delete, scoring delete and file status
+     * as on upload, an empty list is an empty message, and a list with anything but strings
+     * is an error with status 200.
+     */
+    @Test
+    fun aFileJobMessageListIsJoinedOnEveryFileJobAnswer() {
+        val fileJobs = typedMethods().filter {
+            responseType(it) in listOf(ZBSendFileResponse::class.java, ZBDeleteFileResponse::class.java,
+                ZBFileStatusResponse::class.java)
+        }
+        assertTrue("file-job calls: ${fileJobs.size}", fileJobs.size >= 12)
+        val failures = mutableListOf<String>()
+        for (message in listOf("[5]", "[\"ok\",5]", "[\"ok\",null]", "[true]", "[{}]", "[[]]")) {
+            run(fileJobs, "{\"success\":true,\"message\":$message,\"file_id\":\"x\"}", expectError(failures))
+        }
+        for ((message, joined) in listOf("[\"ok\",\"also\"]" to "ok\nalso", "[\"only\"]" to "only", "[]" to "",
+            "\"plain\"" to "plain", "null" to null)) {
+            run(fileJobs, "{\"success\":true,\"message\":$message,\"file_id\":\"x\"}", { body, outcome ->
+                val text = when (val sent = outcome.successes.singleOrNull()) {
+                    is ZBSendFileResponse -> sent.message
+                    is ZBDeleteFileResponse -> sent.message
+                    is ZBFileStatusResponse -> readField(sent, "message") as String?
+                    else -> "<no answer>"
+                }
+                if (outcome.thrown != null || outcome.timedOut || outcome.errors.isNotEmpty() || text != joined) {
+                    failures.add("$body expected ${joined?.replace("\n", "\\n")}: $outcome")
+                }
+            })
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * A date field that no known format reads is an error with status 200 on every typed
+     * call that returns it (standard.md section 3, the date closure), never a null date.
+     */
+    @Test
+    fun anUnparseableDateIsAnErrorWithStatus200OnEveryTypedCall() {
+        val documented = documented()
+        val failures = mutableListOf<String>()
+        var checked = 0
+        for ((type, methods) in typedMethods().groupBy { responseType(it) }) {
+            val list = type is ParameterizedType && type.rawType == List::class.java
+            val model = if (list) rawClass((type as ParameterizedType).actualTypeArguments[0]) else rawClass(type)
+            val base = documented[model]?.first() ?: "{}"
+            for (field in modelFields(model)) {
+                if (field.type != Date::class.java) continue
+                val body = JsonParser.parseString(base).asJsonObject.apply { addProperty(jsonName(field), "not a date") }
+                run(methods, if (list) "[$body]" else body.toString(), expectError(failures))
+                checked++
+            }
+        }
+        assertTrue("date fields checked: $checked", checked >= 2)
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * A message-only body is an error with status 200 on the email finder and domain
+     * search, whatever its message value (standard.md section 3, E3): a non-blank string,
+     * a blank one, null or a list. Validate's greylist Message is a result, not covered here.
+     */
+    @Test
+    fun aMessageOnlyBodyIsAnErrorWithStatus200WhateverItsMessageValue() {
+        val finders = RequestSweep.requestMethods(ZeroBounceClient::class.java)
+            .filter { it.name in setOf("guessFormat", "findEmail", "findDomain") }
+        assertEquals("finder and domain-search calls", 3, finders.size)
+        val failures = mutableListOf<String>()
+        for (body in listOf(
+            "{\"Message\":\"Invalid API key or your account ran out of credits\"}",
+            "{\"message\":\"Not found\"}", "{\"message\":\"\"}", "{\"message\":\"   \"}",
+            "{\"message\":null}", "{\"Message\":null}", "{\"message\":[]}", "{\"message\":[\"a\",\"b\"]}",
+            "{\"message\":[\"\"]}", "{\"message\":[null]}", "{\"message\":5}", "{\"message\":true}",
+            "{\"message\":null,\"error\":\"\"}", "{\"detail\":null}",
+        )) {
+            run(finders, body, expectError(failures))
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * Each marker of the HTML sniff counts on its own (check E, standard.md section 3): a
+     * page with only `<html`, `<head` or `<body` (no doctype), under application/json or
+     * text/csv, is an HTML error page with status 200 on every path, and a download writes
+     * no file. Removing any one marker fails this test.
+     */
+    @Test
+    fun eachHtmlMarkerAloneMakesAnHtmlPageOnEveryPath() {
+        val methods = RequestSweep.requestMethods(ZeroBounceClient::class.java)
+        val pages = listOf(
+            "<html lang=\"en\"><p>Blocked</p></html>",
+            "<head><title>Blocked</title></head><p>Try later</p>",
+            "<body><p>Blocked. Try later.</p></body>",
+        )
+        val failures = mutableListOf<String>()
+        for (page in pages) {
+            for (contentType in listOf("application/json", "text/csv")) {
+                run(methods, page, { body, outcome ->
+                    val onlyHtml = outcome.successes.isEmpty() && outcome.errors.size == 1 &&
+                        outcome.errors[0]?.statusCode == 200 &&
+                        outcome.errors[0]?.errors?.any { it.contains("HTML error page") } == true
+                    if (outcome.thrown != null || outcome.timedOut || !onlyHtml) {
+                        failures.add("$contentType $body $outcome")
+                    }
+                    val written = outcome.out?.let { File(it).exists() } == true
+                    if (written) failures.add("$contentType wrote ${outcome.out} for ${outcome.signature}")
+                }, contentType = contentType)
+            }
+        }
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 }

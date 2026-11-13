@@ -155,6 +155,41 @@ internal object StrictTypes {
     }
 
     /**
+     * A property the public type never leaves null (standard.md section 3): a JSON null
+     * reads as the property's empty value. Used with `nullSafe = false` so the null
+     * reaches this adapter, and every other value goes to the property's own adapter.
+     */
+    internal abstract class NullAsEmpty<T : Any> : TypeAdapterFactory {
+        abstract fun empty(): T
+
+        override fun <R> create(gson: Gson, type: TypeToken<R>): TypeAdapter<R> {
+            val delegate = gson.getDelegateAdapter(this, type)
+            return object : TypeAdapter<R>() {
+                override fun write(out: JsonWriter, value: R) = delegate.write(out, value)
+
+                override fun read(reader: JsonReader): R {
+                    if (reader.peek() == JsonToken.NULL) {
+                        reader.nextNull()
+                        @Suppress("UNCHECKED_CAST")
+                        return empty() as R
+                    }
+                    return delegate.read(reader)
+                }
+            }
+        }
+    }
+
+    /** A text property that is never null: null reads as "". */
+    internal class NullAsEmptyText : NullAsEmpty<String>() {
+        override fun empty(): String = ""
+    }
+
+    /** A list property that is never null: null reads as no rows. */
+    internal class NullAsNoRows : NullAsEmpty<List<Any?>>() {
+        override fun empty(): List<Any?> = emptyList()
+    }
+
+    /**
      * Enums (status, sub-status): a JSON string or null, Gson's own reading of the
      * string kept. Maps (batch error rows): a JSON object or null, not the array
      * of pairs Gson would otherwise also read as a map.

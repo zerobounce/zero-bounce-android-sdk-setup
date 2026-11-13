@@ -1,5 +1,6 @@
 package com.zerobounce.android
 
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -8,6 +9,7 @@ import com.google.gson.annotations.SerializedName
 data class ZBDeleteFileResponse(
     val success: Boolean? = false,
 
+    @JsonAdapter(StrictTypes.TextOrListOfText::class)
     val message: String? = null,
 
     @SerializedName("file_name")

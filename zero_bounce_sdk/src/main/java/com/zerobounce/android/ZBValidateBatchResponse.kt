@@ -1,5 +1,6 @@
 package com.zerobounce.android
 
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -8,6 +9,7 @@ import com.google.gson.annotations.SerializedName
 data class ZBValidateBatchResponse(
 
     @SerializedName("email_batch")
+    @JsonAdapter(value = StrictTypes.NullAsNoRows::class, nullSafe = false)
     val emailBatch: List<ZBValidateResponse>,
 
     val errors: List<LinkedHashMap<String, Any?>>? = null

@@ -373,18 +373,36 @@ internal fun errorOnlyBody(body: String): Boolean {
 private val MESSAGE_KEYS = setOf("error", "message", "error_message", "Message", "Error", "detail")
 
 /**
- * Whether a JSON body is nothing but a message: an object with no "success"
- * field whose keys are all message keys, at least one a non-empty string. Only
- * for the email finder and domain search, whose result is never a bare
- * message. LIVE: guessformat answers an invalid or drained key with an HTTP
- * 200 and {"Message": "Invalid API key or your account ran out of credits"}.
- * Not for validate: a repeated greylist_processing request answers
+ * The error for a body that is nothing but a message: an object with no "success" field
+ * whose keys are all message keys, whatever their values (a string, blank, null or a list);
+ * null otherwise. Only for the email finder and domain search, whose result is never a bare
+ * message. The text is the first message that has any. LIVE: guessformat answers an invalid
+ * or drained key with an HTTP 200 and {"Message": "Invalid API key or your account ran out of
+ * credits"}. Not for validate: a repeated greylist_processing request answers
  * {"Message": "Greylist validation still in progress..."}, which is a result.
  */
-internal fun messageOnlyBody(body: String): Boolean {
-    val parsed = objectWithoutSuccess(body) ?: return false
-    val keys = parsed.keySet()
-    return keys.isNotEmpty() && keys.all { it in MESSAGE_KEYS } && keys.any { nonEmptyString(parsed, it) }
+internal fun messageOnlyError(statusCode: Int, body: String): ErrorResponse? {
+    val parsed = objectWithoutSuccess(body) ?: return null
+    if (parsed.size() == 0 || !parsed.keySet().all { it in MESSAGE_KEYS }) return null
+    val text = parsed.keySet().firstNotNullOfOrNull { messageText(parsed.get(it)) }
+    return ErrorResponse(
+        errors = arrayListOf(text ?: "ZeroBounce returned an error with no message text."),
+        statusCode = statusCode,
+    )
+}
+
+/** A message's text: a string, or the non-blank strings of a list joined with newlines; null when there is none. */
+private fun messageText(value: com.google.gson.JsonElement?): String? {
+    if (value == null || value.isJsonNull) return null
+    val parts = when {
+        value.isJsonPrimitive && value.asJsonPrimitive.isString -> listOf(value.asString)
+        value.isJsonArray -> value.asJsonArray
+            .filter { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+            .map { it.asString }
+        else -> emptyList()
+    }
+    return parts.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+        .takeIf { it.isNotEmpty() }?.let { stripErrorPrefix(it) }
 }
 
 private fun objectWithoutSuccess(body: String): com.google.gson.JsonObject? {
