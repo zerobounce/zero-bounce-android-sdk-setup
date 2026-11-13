@@ -488,7 +488,17 @@ class OfflineFieldTypeTest {
      * once and must read back as its empty value.
      */
     @Test
-    fun aNullInANonNullPropertyReadsAsItsEmptyValue() {
+    fun aNullInANonNullPropertyReadsAsItsEmptyValue() = sweepNonNullProperties(absent = false)
+
+    /**
+     * standard.md section 3: a missing optional field reads exactly like a null one. Every
+     * non-null property is left out of an otherwise valid answer once (Gson then leaves a
+     * property that has no default null) and must read back as its empty value.
+     */
+    @Test
+    fun aMissingNonNullPropertyReadsAsItsEmptyValue() = sweepNonNullProperties(absent = true)
+
+    private fun sweepNonNullProperties(absent: Boolean) {
         val documented = documented()
         val failures = mutableListOf<String>()
         var checks = 0
@@ -500,7 +510,9 @@ class OfflineFieldTypeTest {
             for (field in modelFields(model)) {
                 val kind = declared[field.name] ?: continue
                 if (jsonName(field) in REQUIRED) continue
-                val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), JsonNull.INSTANCE) }
+                val body = JsonParser.parseString(base).asJsonObject.apply {
+                    if (absent) remove(jsonName(field)) else add(jsonName(field), JsonNull.INSTANCE)
+                }
                 val expected = emptyValueOf(kind)
                 run(methods, if (list) "[$body]" else body.toString(), { sent, outcome ->
                     val first = outcome.successes.singleOrNull()
@@ -520,7 +532,7 @@ class OfflineFieldTypeTest {
         }
         for (name in rowKind.keys) {
             val row = JsonObject().apply { addProperty("format", "x"); addProperty("confidence", "x") }
-            row.add(name, JsonNull.INSTANCE)
+            if (absent) row.remove(name) else row.add(name, JsonNull.INSTANCE)
             run(finders, "{\"other_domain_formats\":[$row]}", { sent, outcome ->
                 val rows = outcome.successes.singleOrNull()?.let { readField(it, "otherDomainFormats") } as? List<*>
                 val actual = rows?.firstOrNull()?.let { readField(it, name) }
@@ -611,6 +623,34 @@ class OfflineFieldTypeTest {
             "{\"message\":null,\"error\":\"\"}", "{\"detail\":null}",
         )) {
             run(finders, body, expectError(failures))
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * The text of a message-only error whose message is a list is its strings, blank ones
+     * dropped, the rest joined with newlines (standard.md section 3, E3). Removing the list
+     * reading or the newline join from the text fails this test.
+     */
+    @Test
+    fun aMessageOnlyListIsItsStringsJoinedWithNewlines() {
+        val finders = RequestSweep.requestMethods(ZeroBounceClient::class.java)
+            .filter { it.name in setOf("guessFormat", "findEmail", "findDomain") }
+        assertEquals("finder and domain-search calls", 3, finders.size)
+        val failures = mutableListOf<String>()
+        for ((body, text) in listOf(
+            "{\"message\":[\"a\",\"b\"]}" to "a\nb",
+            "{\"message\":[\"\",\" a \",\"b\"]}" to "a\nb",
+            "{\"Message\":[\"Invalid API key\",\"ran out of credits\"]}" to "Invalid API key\nran out of credits",
+        )) {
+            run(finders, body, { sent, outcome ->
+                val error = outcome.errors.singleOrNull()
+                if (outcome.thrown != null || outcome.successes.isNotEmpty() || error?.statusCode != 200
+                    || error?.errors?.singleOrNull() != text
+                ) {
+                    failures.add("$sent expected \"$text\" $outcome")
+                }
+            })
         }
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }

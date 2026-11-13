@@ -8,8 +8,8 @@ import com.google.gson.annotations.JsonAdapter
 data class DomainFormat(
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var format: String,
+    var format: String = "",
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var confidence: String
+    var confidence: String = ""
 )

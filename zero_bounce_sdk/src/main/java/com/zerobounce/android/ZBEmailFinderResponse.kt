@@ -9,33 +9,33 @@ import com.google.gson.annotations.SerializedName
 data class ZBEmailFinderResponse(
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var email: String,
+    var email: String = "",
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var domain: String,
+    var domain: String = "",
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var format: String,
+    var format: String = "",
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var status: String,
+    var status: String = "",
 
     @SerializedName("sub_status")
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var subStatus: String,
+    var subStatus: String = "",
 
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var confidence: String,
+    var confidence: String = "",
 
     @SerializedName("did_you_mean")
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var didYouMean: String,
+    var didYouMean: String = "",
 
     @SerializedName("failure_reason")
     @JsonAdapter(value = StrictTypes.NullAsEmptyText::class, nullSafe = false)
-    var failureReason: String,
+    var failureReason: String = "",
 
     @SerializedName("other_domain_formats")
     @JsonAdapter(value = StrictTypes.NullAsNoRows::class, nullSafe = false)
-    var otherDomainFormats: List<DomainFormat>
+    var otherDomainFormats: List<DomainFormat> = emptyList()
 ) : JSONConvertable

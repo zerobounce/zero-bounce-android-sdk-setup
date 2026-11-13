@@ -10,7 +10,7 @@ data class ZBValidateBatchResponse(
 
     @SerializedName("email_batch")
     @JsonAdapter(value = StrictTypes.NullAsNoRows::class, nullSafe = false)
-    val emailBatch: List<ZBValidateResponse>,
+    val emailBatch: List<ZBValidateResponse> = emptyList(),
 
     val errors: List<LinkedHashMap<String, Any?>>? = null
 ): JSONConvertable
