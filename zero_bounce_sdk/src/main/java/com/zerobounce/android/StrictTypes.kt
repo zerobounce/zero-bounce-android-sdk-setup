@@ -71,6 +71,90 @@ internal object StrictTypes {
     }
 
     /**
+     * A file job's `message`: a JSON string, or a list of strings that is joined
+     * with a newline into the one string the SDK exposes (an empty list is an empty
+     * message). Every item must be a string; null, a number, a boolean, an array or
+     * an object inside the list is an error (E7).
+     */
+    internal class TextOrListOfText : TypeAdapter<String?>() {
+        override fun write(out: JsonWriter, value: String?) {
+            out.value(value)
+        }
+
+        override fun read(reader: JsonReader): String? = when (val token = reader.peek()) {
+            JsonToken.NULL -> {
+                reader.nextNull()
+                null
+            }
+            JsonToken.STRING -> reader.nextString()
+            JsonToken.BEGIN_ARRAY -> {
+                val items = mutableListOf<String>()
+                reader.beginArray()
+                while (reader.hasNext()) {
+                    val itemToken = reader.peek()
+                    if (itemToken != JsonToken.STRING) {
+                        val path = reader.path
+                        reader.skipValue()
+                        throw StrictTypeException(
+                            "ZeroBounce returned ${wrongName(itemToken)} in ${path.removePrefix("$.")}, which is not a string."
+                        )
+                    }
+                    items.add(reader.nextString())
+                }
+                reader.endArray()
+                items.joinToString("\n")
+            }
+            else -> {
+                val path = reader.path
+                reader.skipValue()
+                throw wrongType(path, token, "a string or a list of strings")
+            }
+        }
+
+        private fun wrongName(token: JsonToken): String = when (token) {
+            JsonToken.NULL -> "null"
+            JsonToken.BOOLEAN -> "a boolean"
+            JsonToken.NUMBER -> "a number"
+            JsonToken.BEGIN_ARRAY -> "an array"
+            JsonToken.BEGIN_OBJECT -> "an object"
+            else -> "a string"
+        }
+    }
+
+    /**
+     * An integer field (the AI score): a JSON integer or a string holding one, within the
+     * int range; null is accepted. A fraction (`5.0`), an exponent (`1e2`), a string with
+     * anything else in it (`" 9"`, `"+9"`), a value out of range, a boolean, an array or an
+     * object is an error (E7).
+     */
+    internal class IntegerValue : TypeAdapter<Int?>() {
+        override fun write(out: JsonWriter, value: Int?) {
+            out.value(value)
+        }
+
+        override fun read(reader: JsonReader): Int? = when (val token = reader.peek()) {
+            JsonToken.NULL -> {
+                reader.nextNull()
+                null
+            }
+            JsonToken.NUMBER, JsonToken.STRING -> {
+                val path = reader.path
+                val text = reader.nextString()
+                val whole = if (INTEGER.matches(text)) text.toIntOrNull() else null
+                whole ?: throw StrictTypeException(
+                    "ZeroBounce returned ${if (token == JsonToken.NUMBER) "a number" else "a string"} for " +
+                        "${path.removePrefix("$.")}, which is not an integer."
+                )
+            }
+            else -> {
+                val path = reader.path
+                reader.skipValue()
+                throw wrongType(path, token, "an integer")
+            }
+        }
+    }
+
+    /**
      * Enums (status, sub-status): a JSON string or null, Gson's own reading of the
      * string kept. Maps (batch error rows): a JSON object or null, not the array
      * of pairs Gson would otherwise also read as a map.

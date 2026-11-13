@@ -183,6 +183,32 @@ class OfflineApiTest {
         assertEquals("true", request.fields["verify_plus"])
     }
 
+    /**
+     * An unset return URL is not sent, on the validation and the scoring upload, file and
+     * stream alike (standard.md section 4, the return_url omission guard): the field is
+     * absent from the request, not sent empty.
+     */
+    @Test
+    fun anUnsetReturnUrlIsNotSentOnAnyUpload() {
+        useSharedKey("file-key")
+        val uploads: List<((ZBSendFileResponse?) -> Unit, (ErrorResponse?) -> Unit) -> Unit> = listOf(
+            { ok, err -> ZeroBounceSDK.sendFile(context, csvFile, 1, responseCallback = ok, errorCallback = err) },
+            { ok, err ->
+                ZeroBounceSDK.sendFile(csvFile.inputStream(), "in.csv", 1, responseCallback = ok, errorCallback = err)
+            },
+            { ok, err -> ZeroBounceSDK.scoringSendFile(context, csvFile, 1, responseCallback = ok, errorCallback = err) },
+            { ok, err ->
+                ZeroBounceSDK.scoringSendFile(csvFile.inputStream(), "in.csv", 1, responseCallback = ok, errorCallback = err)
+            },
+        )
+        for (upload in uploads) {
+            val outcome = await<ZBSendFileResponse> { ok, err -> upload(ok, err) }
+            assertNull(outcome.errorText())
+            val request = onlyRequest()
+            assertFalse(request.path + " sent return_url", request.fields.containsKey("return_url"))
+        }
+    }
+
     @Test
     fun sendFileEncodesBooleansAndKeepsExplicitZeroColumn() {
         useSharedKey("file-key")
@@ -2011,6 +2037,24 @@ class OfflineApiTest {
         sdk.transportInterceptor = fake
         sdk.initialize(key)
         return sdk
+    }
+
+    /**
+     * The clients print no key (check S6, standard.md section 3): toString of the shared
+     * SDK object, of a client holding the API key and of a Warmup client holding the Warmup
+     * key contains neither key.
+     */
+    @Test
+    fun theClientsPrintNoKey() {
+        val key = "tostring-api-key-7d21x"
+        val warmupKey = "tostring-warmup-key-b4c9y"
+        val client = ZeroBounceClient()
+        client.initialize(key)
+        val warmup = ZeroBounceWarmup()
+        warmup.initialize(warmupKey)
+        for (printed in listOf(ZeroBounceSDK.toString(), client.toString(), warmup.toString())) {
+            assertFalse(printed, printed.contains(key) || printed.contains(warmupKey))
+        }
     }
 
     private fun useSharedKey(key: String) {

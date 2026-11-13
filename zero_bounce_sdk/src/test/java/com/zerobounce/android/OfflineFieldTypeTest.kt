@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
+import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.JsonAdapter
@@ -40,6 +41,9 @@ import java.util.Date
  * still decodes.
  */
 class OfflineFieldTypeTest {
+
+    /** JSON names a call cannot answer without (null is an error for these). */
+    private val REQUIRED = setOf("Credits", "address", "status")
 
     private val context: Context = mock()
     private lateinit var dir: File
@@ -219,6 +223,12 @@ class OfflineFieldTypeTest {
             run(methods, if (list) "[$base]" else base, expectSuccess(failures))
             for (field in modelFields(model)) {
                 for (value in wrongValues(field.genericType, field)) {
+                    if (model == ZBSendFileResponse::class.java && field.name == "message" &&
+                        value.isJsonArray && value.asJsonArray.size() == 0
+                    ) {
+                        // An upload's message may be an array of strings; an empty one is an empty message.
+                        continue
+                    }
                     val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), value) }
                     run(methods, if (list) "[$body]" else body.toString(), expectError(failures))
                     bodies++
@@ -226,6 +236,106 @@ class OfflineFieldTypeTest {
             }
         }
         assertTrue("wrong-typed bodies sent: $bodies", bodies > 300)
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * An upload's message may be an array of strings: the SDK joins the items with a
+     * newline into its one string (standard.md section 3). An empty array is an empty
+     * message, and an item that is not a string is an error with status 200.
+     */
+    @Test
+    fun anUploadMessageListIsJoinedAndEveryItemIsAString() {
+        val uploads = typedMethods().filter { responseType(it) == ZBSendFileResponse::class.java }
+        assertTrue("uploads: ${uploads.size}", uploads.size >= 4)
+        val failures = mutableListOf<String>()
+        for (message in listOf("[5]", "[\"ok\",5]", "[\"ok\",null]", "[\"ok\",true]", "[\"ok\",{}]", "[\"ok\",[]]")) {
+            run(uploads, "{\"success\":true,\"message\":$message,\"file_id\":\"x\"}", expectError(failures))
+        }
+        for ((message, joined) in listOf("[\"ok\",\"also\"]" to "ok\nalso", "[\"only\"]" to "only", "[]" to "")) {
+            run(uploads, "{\"success\":true,\"message\":$message,\"file_id\":\"x\"}", { body: String, outcome: RequestSweep.Outcome ->
+                val text = (outcome.successes.singleOrNull() as? ZBSendFileResponse)?.message
+                if (outcome.thrown != null || outcome.timedOut || outcome.errors.isNotEmpty() || text != joined) {
+                    failures.add("$body expected message ${joined.replace("\n", "\\n")}: $outcome")
+                }
+            })
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * null is accepted for an optional field (standard.md section 3): on every typed call,
+     * each top-level field, and each validateBatch row field, set to null one at a time,
+     * leaves an otherwise valid answer a success. Credits, address and status are excluded.
+     */
+    @Test
+    fun nullInAnOptionalFieldIsNotAnError() {
+        val documented = documented()
+        val failures = mutableListOf<String>()
+        var bodies = 0
+        for ((type, methods) in typedMethods().groupBy { responseType(it) }) {
+            val list = type is ParameterizedType && type.rawType == List::class.java
+            val model = if (list) rawClass((type as ParameterizedType).actualTypeArguments[0]) else rawClass(type)
+            val base = documented[model]?.first() ?: "{}"
+            for (field in modelFields(model)) {
+                if (jsonName(field) in REQUIRED) continue
+                val body = JsonParser.parseString(base).asJsonObject.apply { add(jsonName(field), JsonNull.INSTANCE) }
+                run(methods, if (list) "[$body]" else body.toString(), expectSuccess(failures))
+                bodies++
+            }
+            if (model == ZBValidateBatchResponse::class.java) {
+                for (field in modelFields(ZBValidateBatchData::class.java)) {
+                    if (jsonName(field) in REQUIRED) continue
+                    val row = JsonParser.parseString("{\"address\":\"a@b.c\",\"status\":\"valid\"}")
+                        .asJsonObject.apply { add(jsonName(field), JsonNull.INSTANCE) }
+                    run(methods, "{\"email_batch\":[$row]}", expectSuccess(failures))
+                    bodies++
+                }
+            }
+        }
+        assertTrue("null bodies sent: $bodies", bodies > 100)
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * "success" is a JSON boolean. The string "false" (any case) is neither a failure
+     * report read as false nor a success: on every request method, JSON and download
+     * alike, it is an error with status 200 (standard.md section 3, E4).
+     */
+    @Test
+    fun aSuccessStringFalseIsAnErrorWithStatus200OnEveryRequestMethod() {
+        val methods = RequestSweep.requestMethods(ZeroBounceClient::class.java)
+        assertTrue("request methods: ${methods.size}", methods.size > 40)
+        val failures = mutableListOf<String>()
+        for (body in listOf("{\"success\":\"false\",\"message\":\"nope\"}",
+            "{\"success\":\"False\",\"message\":\"nope\"}", "{\"success\":\"false\"}",
+            "{\"success\":\"FALSE\",\"error\":\"nope\"}")) {
+            run(methods, body, expectError(failures))
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * The AI score is an integer in the API (check E7): a JSON integer, or a string holding
+     * one, within the int range is a result; a fraction, an exponent, a non-numeric string, a
+     * value outside the int range, a boolean, an array or an object is an error with status 200
+     * on both scoring calls.
+     */
+    @Test
+    fun theScoreIsAnIntegerOnEveryScoringCall() {
+        val scoring = typedMethods().filter { responseType(it) == ZBScoreEmailResponse::class.java }
+        assertTrue("scoring overloads: ${scoring.size}", scoring.size >= 2)
+        val failures = mutableListOf<String>()
+        for (body in listOf("{\"score\":5.5}", "{\"score\":5.0}", "{\"score\":1e2}", "{\"score\":1e400}",
+            "{\"score\":\"5.9\"}", "{\"score\":\"abc\"}", "{\"score\":\"\"}", "{\"score\":\" 9\"}",
+            "{\"score\":true}", "{\"score\":[9]}", "{\"score\":{}}", "{\"score\":2147483648}",
+            "{\"score\":\"2147483648\"}", "{\"score\":\"+9\"}")) {
+            run(scoring, body, expectError(failures))
+        }
+        for (body in listOf("{\"score\":9}", "{\"score\":\"9\"}", "{\"score\":\"-1\"}", "{\"score\":0}",
+            "{\"score\":null}", "{\"score\":2147483647}", "{\"score\":-2147483648}")) {
+            run(scoring, body, expectSuccess(failures))
+        }
         assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
