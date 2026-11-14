@@ -14,6 +14,8 @@ import java.util.Date
 class ZeroBounceClient {
     private val state = SdkState()
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var transportInterceptor: Interceptor?
         get() = use { ZeroBounceSDK.transportInterceptor }
         set(value) {

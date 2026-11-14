@@ -45,7 +45,7 @@ class GsonDateDeserializer : JsonDeserializer<Date?> {
      */
     @Throws(ParseException::class)
     private fun parseDate(dateString: String?): Date? {
-        if (dateString == null || dateString.trim { it <= ' ' }.isEmpty()) {
+        if (dateString == null || dateString.trim().isEmpty()) {
             return null
         }
         // LIVE: bulk `filestatus` answers with an ISO-8601 `upload_date`, for
@@ -71,6 +71,7 @@ class GsonDateDeserializer : JsonDeserializer<Date?> {
          * y M d H h m s S a, all supported since API 1. Never add `X`, `Y`
          * or `u`: they are API 24+.
          */
+        @get:JvmSynthetic
         internal val PATTERNS = listOf(
             "yyyy-MM-dd HH:mm:ss.SSS",
             "MM/dd/yyyy h:mm:ss a",
@@ -89,6 +90,7 @@ class GsonDateDeserializer : JsonDeserializer<Date?> {
          * formats are. The fraction is read as milliseconds: its first three
          * digits, right-padded with zeros.
          */
+        @JvmSynthetic
         internal fun parseIso8601(text: String): Date? {
             val match = ISO_8601.matchEntire(text) ?: return null
             val g = match.groupValues

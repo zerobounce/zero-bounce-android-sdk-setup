@@ -665,6 +665,7 @@ internal class Priority3Api {
          * added. A CSV never parses as a JSON object, so a results file is not
          * mistaken for one.
          */
+        @JvmSynthetic
         internal fun looksLikeJsonError(bodyStr: String): Boolean {
             val trimmed = bodyStr.trim()
             if (!trimmed.startsWith("{")) return false

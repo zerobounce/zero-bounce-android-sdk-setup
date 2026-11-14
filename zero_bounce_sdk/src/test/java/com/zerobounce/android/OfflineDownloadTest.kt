@@ -174,6 +174,36 @@ class OfflineDownloadTest {
         }
     }
 
+    @Test
+    fun aRuntimeExceptionWhileSavingIsAnErrorCallbackNotAThrow() {
+        downloadFileOpener = { throw IllegalStateException("disk exploded") }
+        try {
+            withServer(LoopbackServer.answer(200, "text/csv", csv.toByteArray())) { _, client ->
+                val r = getFile(client)
+                assertNull(r.path)
+                assertNotNull(r.error)
+                assertEquals(0, r.error!!.statusCode)
+                assertTrue(r.error!!.errors.joinToString(), r.error!!.errors.joinToString().contains("disk exploded"))
+                assertTrue("no file left behind", dir.listFiles()!!.isEmpty())
+            }
+        } finally {
+            downloadFileOpener = { java.io.FileOutputStream(it) }
+        }
+    }
+
+    @Test
+    fun aServerNamedFileThatIsAnExistingDirectoryIsRefusedByGetFile() {
+        val taken = File(dir, "taken").apply { mkdirs() }
+        File(taken, "keep").writeText("keep")
+        withServer(disposition("attachment; filename=\"taken\"")) { _, client ->
+            val r = getFile(client)
+            assertNull(r.path)
+            assertNotNull(r.error)
+            assertTrue(taken.isDirectory)
+            assertTrue(File(taken, "keep").exists())
+        }
+    }
+
     private fun disposition(value: String): (LoopbackServer.Request, OutputStream) -> Unit = { _, out ->
         val body = csv.toByteArray()
         out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/csv\r\nContent-Disposition: $value\r\n" +

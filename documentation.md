@@ -358,8 +358,8 @@ The documentation of the SDK can be generated through a *Gradle* task. Open the 
 
 Publishing to Maven Central is done by the GitHub Actions **Publish** workflow ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)), run **manually per tag**. It does not run on its own when a release is created, and it does not change the version.
 
-1. **Version the project** and create a **git tag** (e.g. `v1.5.1`), then push the tag.
-2. In the repo go to **Actions → Publish**, click **Run workflow**, enter the tag (e.g. `v1.5.1`), and run.
+1. **Version the project** and create a **git tag** (e.g. `vX.Y.Z`), then push the tag.
+2. In the repo go to **Actions → Publish**, click **Run workflow**, enter the tag (e.g. `vX.Y.Z`), and run.
 3. The workflow checks out the tag, runs the unit tests and a release build, and runs `./gradlew centralBundle`, which signs the artifacts, stages them in `build/central-staging` and zips them into `build/central-bundle.zip`. It uploads that bundle to the [Sonatype Central Portal](https://central.sonatype.com) with `publishingType=AUTOMATIC`, so a bundle that passes the Portal's validation is released without a manual step. Last, it creates a GitHub release for the tag.
 
 The Portal validates and releases the bundle asynchronously. If the new version does not appear, check its deployment at [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments).

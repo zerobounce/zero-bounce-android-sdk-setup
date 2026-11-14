@@ -67,6 +67,8 @@ class ZeroBounceWarmup {
      * Test hook. When set, [initialize] installs it on the OkHttp client so
      * unit tests can answer requests without the network.
      */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var transportInterceptor: Interceptor? = null
 
     private fun buildClient(interceptor: Interceptor?): OkHttpClient {
@@ -98,7 +100,7 @@ class ZeroBounceWarmup {
             // error, or be refused by OkHttp as a header value.
             hasUnsafeKeyCharacters(apiKey) -> API_KEY_CHARACTERS_PROBLEM
             !isHeaderSafeKey(apiKey) -> API_KEY_HEADER_PROBLEM
-            !baseUrl.lowercase().startsWith("https://") -> "base_url must be an https:// URL"
+            !ZeroBounceSDK.isAllowedApiBaseUrl(baseUrl) -> "base_url must be an https:// URL"
             else -> null
         }
         if (problem != null) {

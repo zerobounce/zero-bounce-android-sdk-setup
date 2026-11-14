@@ -3,6 +3,7 @@ package com.zerobounce.android
 import android.content.Context
 import com.google.gson.Gson
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -34,6 +35,7 @@ class OfflineErrorsAuditTest {
         dir = File(System.getProperty("java.io.tmpdir"), "zb-android-errors-${System.nanoTime()}")
         dir.mkdirs()
         csv = File(dir, "in.csv").apply { writeText("email\na@example.com\n") }
+        whenever(context.getExternalFilesDir(null)).thenReturn(dir)
     }
 
     @After

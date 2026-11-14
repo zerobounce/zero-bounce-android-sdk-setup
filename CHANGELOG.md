@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Publish workflow has a `concurrency` group, so a second dispatch queues instead of publishing twice.
+- Release steps in the README and documentation use a `vX.Y.Z` placeholder tag instead of a stale example.
 - Repository only: the example app compiles against API 37, as the SDK requires of every consumer (`compileSdk = 37`); with 36 its `checkDebugAarMetadata` failed, so the app did not build.
 - **Behaviour change:** `ZeroBounceSDK.initialize` and `ZeroBounceClient.initialize` now refuse every non-https base URL, including `http://localhost`, `127.0.0.1` and `::1` (before, loopback http was accepted). `setListEvaluatorBaseUrl` and `setInboxPlacementBaseUrl` follow the same rule.
 - **Behaviour change:** `ZBValidateResponse.freeEmail` and `mxFound` are now `Boolean?`. A response without `free_email` / `mx_found` (or with null) reads `null` instead of `false`, as in the Java SDK. Kotlin callers that used them as `Boolean` must handle null.
@@ -27,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Behaviour change:** `sendFile(context, file, ...)` and `scoringSendFile(context, file, ...)` no longer require `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`. On Android 13+ the first cannot be granted and the second does nothing since API 30, so File uploads were always refused. A missing file now reports "File does not exist", and a directory or unreadable file reports "File cannot be read", through the error callback with no request sent.
+- Internal test seams (`client`, `transportInterceptor`, the base-URL properties, the download opener and every other `internal` member) were callable from Java under mangled names such as `setApiBaseUrl$zero_bounce_sdk`, so Java code could point the SDK at an http URL and send the key in the clear. They are now synthetic and invisible to Java; a test checks the compiled classes.
+- A base URL like `https://exa mple.com/v2` was accepted by `initialize` and then made every call throw `IllegalArgumentException` with no callback. The URL is now parsed: `initialize`, `setListEvaluatorBaseUrl`, `setInboxPlacementBaseUrl` refuse it with `IllegalArgumentException`, and `ZeroBounceWarmup.initialize` reports it through every call's error callback.
+- A `RuntimeException` thrown by the stream passed to `sendFile(inputStream, ...)` / `scoringSendFile(inputStream, ...)` escaped to the caller with no callback. It now reaches the error callback (status 0) and no request is sent.
+- `getFile` / `scoringGetFile` when `Context.getExternalFilesDir(null)` is null saved to a relative path and could report a misleading "permission denied". They now fail before any request with "No external files directory available".
 - Android 5 and 6 (API 21-23): `initialize` no longer crashes with `NoSuchMethodError`; the API key check no longer uses `String.codePoints()` (API 24).
 - Saving a download over an existing file no longer calls `java.nio.file` below Android 8 (API 26) without a version check; lint is clean.
 - `sendFile(InputStream...)`, `scoringSendFile(InputStream...)` and the priority-3 stream uploads: an input stream that throws `IOException` used to throw at the caller with no callback. It now reaches the error callback (status 0) and no request is sent.
@@ -85,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- The Android lint tool dependencies (guava, Bouncy Castle, commons-lang3, httpclient) used by `lintDebug` in CI are raised to patched releases. Build tooling only; nothing changes in the published library.
+- The Gradle wrapper now verifies the Gradle distribution with `distributionSha256Sum`.
 - **Behaviour change:** `initialize` (main client, `ZeroBounceClient` and `ZeroBounceWarmup`) now refuses an API key that contains any whitespace (including NBSP and U+2003), control character, or invisible format character (zero-width space or joiner, BOM, word joiner, U+180E), anywhere in the key, not only at the ends. Before, such keys were accepted and sent. Every call now reports "api_key has whitespace, control or invisible characters" instead.
 - **Behaviour change:** `ZeroBounceWarmup.initialize` also refuses a key with non-ASCII characters ("api_key has characters that cannot be sent in an HTTP header"). Before, OkHttp threw an `IllegalArgumentException` on every call whose message quoted the full key. Any header value OkHttp cannot write (Warmup `API-Key`, Inbox Placement `Bearer`) now reaches the error callback with that fixed message, never a thrown exception and never the key.
 - Redaction is now case-insensitive: a server that echoes the key or an SMTP password in a different letter case (for example upper-cased) no longer gets it through in `validate`, `getCredits`, Warmup or `testSmtpConfiguration` errors.
@@ -251,6 +260,24 @@ The details are under Changed and Fixed below.
 
 - License the project under MIT.
 
+## [1.5.0] - 2026-02-18
+
+### Changed
+
+- Version bump only; no change to the SDK's code.
+
+## [1.4.0] - 2026-02-17
+
+### Changed
+
+- Updated the Gradle and GitHub Actions dependencies. The 1.4.1 and 1.4.2 releases that followed were build-only (Dokka 2 migration).
+
+## [1.3.0] - 2025-10-22
+
+### Changed
+
+- Updated the Gradle build and the publishing setup (the Javadoc jar is built again with Dokka).
+
 ## [1.5.1] - 2026-02-18 (tagged, never published)
 
 ### Added
@@ -267,11 +294,23 @@ The details are under Changed and Fixed below.
 
 - Publishing uses the Maven Central portal.
 
+## [1.1.6] - 2023-08-24
+
+### Changed
+
+- Minor tweaks, and Spanish translations of the README and documentation.
+
 ## [1.1.5] - 2023-08-24
 
 ### Added
 
 - Email finder.
+
+## [1.1.4] - 2023-05-04
+
+### Changed
+
+- Version bump only; no change to the SDK's code.
 
 ## [1.1.3] - 2023-05-04
 
@@ -284,6 +323,23 @@ The details are under Changed and Fixed below.
 ### Added
 
 - `validateBatch`.
+
+## [1.1.1] - 2023-03-21
+
+### Changed
+
+- Publishing moved to the Gradle publish plugin with a GitHub Actions workflow that tests and then publishes to Maven Central. No change to the SDK's code.
+
+## [1.1.0] - 2023-03-17
+
+### Added
+
+- Activity data request and `scoringDeleteFile`.
+- `ErrorResponse`: the error callback now always receives one.
+
+### Changed
+
+- Replaced Volley with OkHttp3, and raised minSdk to 21 (compileSdk and targetSdk to 33).
 
 ## [1.0.0] - 2023-03-22
 
@@ -304,8 +360,15 @@ The details are under Changed and Fixed below.
 [2.0.18]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.17...v2.0.18
 [2.0.17]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.0...v2.0.17
 [1.5.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.4.2...v1.5.0
+[1.4.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.6...v1.2.1
+[1.1.6]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.4...v1.1.5
+[1.1.4]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/releases/tag/v1.0.0

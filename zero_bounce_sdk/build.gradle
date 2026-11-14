@@ -116,6 +116,28 @@ configurations.matching { it.name.startsWith('dokka') }.configureEach { configur
     }
 }
 
+// The Android lint tool (lint-gradle, run by lintDebug in CI) resolves guava, bouncycastle, commons-lang3
+// and httpclient releases with published advisories. Lint only analyses the sources and never ships in
+// the library, but raise them anyway so the build tooling carries no known-vulnerable jars. Drop an entry
+// once AGP's lint ships a fixed version.
+def lintPatched = [
+        'com.google.guava:guava'                  : '33.8.0-jre',
+        'org.bouncycastle:bcprov-jdk18on'         : '1.87',
+        'org.bouncycastle:bcpkix-jdk18on'         : '1.87',
+        'org.bouncycastle:bcutil-jdk18on'         : '1.87',
+        'org.apache.commons:commons-lang3'        : '3.22.0',
+        'org.apache.httpcomponents:httpclient'    : '4.5.14',
+]
+configurations.matching { it.name.startsWith('androidLint') }.configureEach { configuration ->
+    configuration.resolutionStrategy.eachDependency { details ->
+        def patched = lintPatched["${details.requested.group}:${details.requested.name}".toString()]
+        if (patched != null) {
+            details.useVersion patched
+            details.because 'Android lint tool dependency with published advisories'
+        }
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'

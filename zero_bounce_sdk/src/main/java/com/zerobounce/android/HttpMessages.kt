@@ -12,11 +12,13 @@ import java.io.IOException
 import java.io.OutputStream
 import java.net.URLEncoder
 
+@JvmSynthetic
 internal fun looksLikeHtml(body: String): Boolean {
     val head = body.take(2000).lowercase(java.util.Locale.ROOT)
     return "<!doctype html" in head || "<html" in head || "<head" in head || "<body" in head
 }
 
+@JvmSynthetic
 internal fun stripErrorPrefix(message: String): String {
     var rest = message.trim()
     while (true) {
@@ -33,6 +35,7 @@ internal fun stripErrorPrefix(message: String): String {
  * a server can quote it back: as is (a header, a JSON or multipart body),
  * URL-encoded (a query string or a form) and JSON-escaped.
  */
+@JvmSynthetic
 internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
     var value = text
     for (secret in secrets) {
@@ -61,6 +64,7 @@ internal const val CREDENTIAL_OMITTED = "The response body was omitted because i
  * SDK's own request encoding plus three layers a server can add; URL-decoding
  * with and without `+` as a space, and JSON unescaping), holds one of [secrets].
  */
+@JvmSynthetic
 internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
     val wanted = secrets.filterNotNull().filter { it.isNotEmpty() }
     if (wanted.isEmpty()) return false
@@ -170,6 +174,7 @@ private fun secretForms(secret: String): List<String> {
  * `trim()` drops more than JSON whitespace (NBSP, U+2003, U+000B, U+001C to U+001F),
  * so the body is never trimmed before this check.
  */
+@JvmSynthetic
 internal fun isStrictJson(body: String): Boolean {
     val pos = intArrayOf(skipJsonWhitespace(body, 0))
     if (!strictValue(body, pos, 0)) return false
@@ -281,16 +286,19 @@ private fun jsonDigits(text: String, from: Int): Int {
  * A response body as text, byte for byte: OkHttp's `string()` drops a leading byte
  * order mark, which would let a BOM-prefixed body pass the strict JSON check.
  */
+@JvmSynthetic
 internal fun bodyText(response: Response): String {
     val body = response.body
     return String(body.bytes(), body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8)
 }
 
 /** Whether a content type names an HTML page. */
+@JvmSynthetic
 internal fun isHtmlContentType(contentType: String?): Boolean =
     contentType.orEmpty().contains("text/html", ignoreCase = true)
 
 /** This error with each of [secrets] redacted from its messages. */
+@JvmSynthetic
 internal fun ErrorResponse.redacted(secrets: Iterable<String?>): ErrorResponse {
     // The list is declared as strings, but a JSON array in an error body can
     // put numbers or objects in it. Those are kept as they are unless their
@@ -307,6 +315,7 @@ internal fun ErrorResponse.redacted(secrets: Iterable<String?>): ErrorResponse {
     return this
 }
 
+@JvmSynthetic
 internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
     val text = body?.trim().orEmpty()
     if (text.isEmpty()) {
@@ -342,6 +351,7 @@ internal fun httpError(statusCode: Int, body: String?): ErrorResponse {
 }
 
 /** An HTML page in place of an API response, named by its title when it has one. */
+@JvmSynthetic
 internal fun htmlPageError(statusCode: Int, body: String): ErrorResponse {
     val title = htmlTitle(body)
     val message = if (title.isEmpty()) {
@@ -352,6 +362,7 @@ internal fun htmlPageError(statusCode: Int, body: String): ErrorResponse {
     return ErrorResponse(errors = arrayListOf(message), statusCode = statusCode)
 }
 
+@JvmSynthetic
 internal fun jsonIsUsable(statusCode: Int, body: String?): Boolean {
     val text = body?.trim().orEmpty()
     if (statusCode > 299 || text.isEmpty() || looksLikeHtml(body.orEmpty())) return false
@@ -369,6 +380,7 @@ internal fun jsonIsUsable(statusCode: Int, body: String?): Boolean {
  * and the filters with {"Error": ...}, on an HTTP 200. "message" and
  * "Message" are not among the keys: successful responses use them too.
  */
+@JvmSynthetic
 internal fun errorOnlyBody(body: String): Boolean {
     val parsed = objectWithoutSuccess(body) ?: return false
     return listOf("error", "error_message", "Error").any { nonEmptyString(parsed, it) }
@@ -385,6 +397,7 @@ private val MESSAGE_KEYS = setOf("error", "message", "error_message", "Message",
  * credits"}. Not for validate: a repeated greylist_processing request answers
  * {"Message": "Greylist validation still in progress..."}, which is a result.
  */
+@JvmSynthetic
 internal fun messageOnlyError(statusCode: Int, body: String): ErrorResponse? {
     val parsed = objectWithoutSuccess(body) ?: return null
     if (!parsed.keySet().all { it in MESSAGE_KEYS }) return null
@@ -430,6 +443,7 @@ private fun nonEmptyString(obj: com.google.gson.JsonObject, key: String): Boolea
  * success. The API sends "success" as a JSON false, "false" or "False"
  * depending on the endpoint.
  */
+@JvmSynthetic
 internal fun successMeansFailure(body: String): Boolean {
     if (!body.trimStart().startsWith("{")) return false
     return try {
@@ -451,6 +465,7 @@ internal fun successMeansFailure(body: String): Boolean {
  * The error for a body the SDK could not decode. A boolean that is not one is
  * reported by name; anything else as [httpError] reports the body.
  */
+@JvmSynthetic
 internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): ErrorResponse {
     if (cause is WrongShapeException) {
         return ErrorResponse(errors = arrayListOf(WRONG_SHAPE), statusCode = statusCode)
@@ -465,9 +480,11 @@ internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): Err
 private const val BOM = '\uFEFF'
 
 /** [text] without a leading byte-order mark. */
+@JvmSynthetic
 internal fun stripBom(text: String): String = text.removePrefix(BOM.toString())
 
 /** Whether [contentType] is `application/json` or any `+json` type (`application/problem+json`). */
+@JvmSynthetic
 internal fun isJsonContentType(contentType: String?): Boolean {
     val type = contentType.orEmpty().substringBefore(';').trim().lowercase(java.util.Locale.ROOT)
     return type == "application/json" || type.endsWith("+json")
@@ -478,6 +495,7 @@ internal fun isJsonContentType(contentType: String?): Boolean {
  * after an optional byte-order mark, whatever its content type. A CSV never
  * parses as one.
  */
+@JvmSynthetic
 internal fun looksLikeJsonDownload(text: String): Boolean {
     val trimmed = stripBom(text).trim()
     if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false
@@ -489,6 +507,7 @@ internal fun looksLikeJsonDownload(text: String): Boolean {
     }
 }
 
+@JvmSynthetic
 internal fun downloadRejected(statusCode: Int, contentType: String, bytes: ByteArray): Boolean {
     if (statusCode > 299 || isHtmlContentType(contentType)) return true
     val text = stripBom(bytes.toString(Charsets.UTF_8))
@@ -505,6 +524,7 @@ private const val DOWNLOAD_SNIFF_BYTES = 8192L
  * a separator, or an existing directory. Checked before the request is sent, so
  * nothing is asked of the server for a file that cannot be saved.
  */
+@JvmSynthetic
 internal fun downloadTargetError(path: String?): ErrorResponse? {
     if (path.isNullOrBlank()) {
         return ErrorResponse(errors = arrayListOf("download_path must not be blank"))
@@ -529,6 +549,7 @@ internal fun downloadTargetError(path: String?): ErrorResponse? {
  * @throws IOException when reading the body or writing [file] fails. A partly
  * written file is deleted first.
  */
+@JvmSynthetic
 internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     val code = response.code
     val contentType = response.body.contentType()?.toString()
@@ -567,6 +588,8 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
 
 /** Opens the temporary file a download is written to. Tests replace it with one that fails part-way. */
 @Volatile
+@get:JvmSynthetic
+@set:JvmSynthetic
 internal var downloadFileOpener: (File) -> OutputStream = { FileOutputStream(it) }
 
 /**
@@ -608,9 +631,13 @@ private fun writeDownload(requested: File, write: (OutputStream) -> Unit) {
 }
 
 /** Whether java.nio.file exists on this platform (API 26+); a unit test on the JVM replaces it. */
+@get:JvmSynthetic
+@set:JvmSynthetic
 internal var nioPermissionsAvailable: () -> Boolean = { Build.VERSION.SDK_INT >= 26 }
 
 // Only reached when nioPermissionsAvailable() is true, i.e. on API 26+.
+// RequiresApi would need the androidx.annotation dependency, which this library does not carry.
+@Suppress("UseRequiresApi")
 @TargetApi(26)
 private fun copyPosixPermissions(from: File, to: File) {
     val perms = java.nio.file.Files.getPosixFilePermissions(from.toPath())
@@ -674,6 +701,7 @@ internal const val API_KEY_HEADER_PROBLEM = "api_key has characters that cannot 
  * NBSP and U+2003), a control character, or a format character (Unicode category
  * Cf: zero-width space and joiner, BOM, word joiner, U+180E, bidi marks).
  */
+@JvmSynthetic
 internal fun hasUnsafeKeyCharacters(key: String): Boolean =
     unsafeKeyCharacterScan(key)
 
@@ -691,4 +719,5 @@ private fun unsafeKeyCharacterScan(key: String): Boolean {
 }
 
 /** Whether [key] can be a header value as is: visible ASCII only (0x21 to 0x7E). */
+@JvmSynthetic
 internal fun isHeaderSafeKey(key: String): Boolean = key.all { it.code in 0x21..0x7E }

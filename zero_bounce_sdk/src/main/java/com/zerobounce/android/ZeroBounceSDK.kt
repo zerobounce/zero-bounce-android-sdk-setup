@@ -1,6 +1,5 @@
 package com.zerobounce.android
 
-import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import com.google.gson.FieldNamingPolicy
@@ -41,6 +40,7 @@ object ZeroBounceSDK {
 
     private fun state(): SdkState = threadState.get() ?: sharedState
 
+    @JvmSynthetic
     internal fun <T> useState(state: SdkState, block: () -> T): T {
         val previous = threadState.get()
         threadState.set(state)
@@ -60,6 +60,8 @@ object ZeroBounceSDK {
         get() = state().apiKeyProblem
         set(value) { state().apiKeyProblem = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var client: OkHttpClient
         get() = state().client
         set(value) { state().client = value }
@@ -68,39 +70,49 @@ object ZeroBounceSDK {
      * Test hook. When set, [initialize] installs it on the OkHttp client so unit tests can
      * answer requests without the network. Production leaves this null.
      */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var transportInterceptor: Interceptor?
         get() = state().transportInterceptor
         set(value) { state().transportInterceptor = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var apiBaseUrl: String
         get() = state().apiBaseUrl
         set(value) { state().apiBaseUrl = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var bulkApiBaseUrl: String
         get() = state().bulkApiBaseUrl
         set(value) { state().bulkApiBaseUrl = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var listEvaluatorBaseUrl: String
         get() = state().listEvaluatorBaseUrl
         set(value) { state().listEvaluatorBaseUrl = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var inboxPlacementBaseUrl: String
         get() = state().inboxPlacementBaseUrl
         set(value) { state().inboxPlacementBaseUrl = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var bulkApiScoringBaseUrl: String
         get() = state().bulkApiScoringBaseUrl
         set(value) { state().bulkApiScoringBaseUrl = value }
 
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     internal var bulkApiRootUrl: String
         get() = state().bulkApiRootUrl
         set(value) { state().bulkApiRootUrl = value }
 
     private val priority3Api = Priority3Api()
-
-    private const val READ_EXTERNAL_STORAGE = Manifest.permission.READ_EXTERNAL_STORAGE
-    private const val WRITE_EXTERNAL_STORAGE = Manifest.permission.WRITE_EXTERNAL_STORAGE
-    private val STORAGE_PERMISSIONS = arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
 
     // The documented limits of the Inbox Placement Tester.
     private const val MAX_INBOX_PLACEMENT_NAME = 64
@@ -176,12 +188,13 @@ object ZeroBounceSDK {
         apiBaseUrl?.let { this.apiBaseUrl = it.trimEnd('/') }
     }
 
+    @JvmSynthetic
     internal fun isAllowedApiBaseUrl(url: String, allowLoopbackHttp: Boolean = false): Boolean {
-        val lower = url.lowercase()
-        if (lower.startsWith("https://")) return true
-        if (!allowLoopbackHttp || !lower.startsWith("http://")) return false
-        val host = url.toHttpUrlOrNull()?.host ?: return false
-        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+        val parsed = url.toHttpUrlOrNull() ?: return false
+        if (parsed.host.isEmpty()) return false
+        if (parsed.isHttps) return true
+        if (!allowLoopbackHttp) return false
+        return parsed.host == "localhost" || parsed.host == "127.0.0.1" || parsed.host == "::1"
     }
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
@@ -245,6 +258,7 @@ object ZeroBounceSDK {
         return entry["error"]?.toString() ?: "Invalid API Key or your account ran out of credits"
     }
 
+    @JvmSynthetic
     internal fun safeFileName(raw: String?): String? =
         raw?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.takeIf { it.isNotBlank() && it != "." && it != ".." }
@@ -254,6 +268,7 @@ object ZeroBounceSDK {
      * (percent-decoded) wins over `filename=`, whose quotes are removed.
      * Null when the header names none.
      */
+    @JvmSynthetic
     internal fun contentDispositionFileName(header: String?): String? {
         if (header == null) return null
         val params = Regex("""(filename\*?)\s*=\s*("(?:[^"\\]|\\.)*"|[^;]*)""", RegexOption.IGNORE_CASE)
@@ -689,7 +704,6 @@ object ZeroBounceSDK {
     ) {
         sendFileInternal(
             scoring = false,
-            context = context,
             file = file,
             emailAddressColumnIndex = emailAddressColumnIndex,
             firstNameColumnIndex = firstNameColumnIndex,
@@ -769,7 +783,6 @@ object ZeroBounceSDK {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         sendFileInternal(
-            context = context,
             scoring = true,
             file = file,
             emailAddressColumnIndex = emailAddressColumnIndex,
@@ -831,7 +844,6 @@ object ZeroBounceSDK {
      */
     @Throws(ZBException::class)
     private fun sendFileInternal(
-        context: Context,
         scoring: Boolean,
         file: File,
         emailAddressColumnIndex: Int,
@@ -848,17 +860,16 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
 
-        if (!hasPermissions(context, STORAGE_PERMISSIONS)) {
-            val errorResponse = ErrorResponse.parseError(
-                "Cannot send file, permissions $READ_EXTERNAL_STORAGE and $WRITE_EXTERNAL_STORAGE are not granted"
-            )
-            errorCallback(errorResponse)
-            return
-        }
-
+        // No storage-permission gate: on Android 13+ READ_EXTERNAL_STORAGE cannot be
+        // granted and WRITE_EXTERNAL_STORAGE does nothing since API 30. A file that
+        // cannot be read is reported here, before any request is sent.
         if (!file.exists()) {
             val errorResponse = ErrorResponse.parseError("File does not exist")
             errorCallback(errorResponse)
+            return
+        }
+        if (!file.isFile || !file.canRead()) {
+            errorCallback(ErrorResponse.parseError("File cannot be read"))
             return
         }
 
@@ -933,13 +944,14 @@ object ZeroBounceSDK {
      * Reads a caller's upload stream. A stream that fails is reported to
      * [errorCallback] (status 0, no request sent) rather than thrown at the caller.
      */
+    @JvmSynthetic
     internal fun readUploadStream(
         inputStream: InputStream,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ): okhttp3.RequestBody? {
         val bytes = try {
             inputStream.readBytes()
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             errorCallback(ErrorResponse.parseError("Could not read the upload stream (${e.message ?: "I/O error"})."))
             return null
         }
@@ -1160,6 +1172,11 @@ object ZeroBounceSDK {
         if (invalidApiKey(errorCallback)) return
         if (blankParameter(fileId, "file_id", errorCallback)) return
 
+        if (context.getExternalFilesDir(null) == null) {
+            errorCallback(ErrorResponse.parseError("No external files directory available"))
+            return
+        }
+
         val baseUrl = if (scoring) bulkApiScoringBaseUrl else bulkApiBaseUrl
         val params = mutableListOf("api_key" to (apiKey ?: ""), "file_id" to fileId)
         downloadType?.let { params += "download_type" to it.apiValue }
@@ -1180,7 +1197,12 @@ object ZeroBounceSDK {
                     // Only the last path component of the server's name is
                     // used, so the file stays inside the app's files directory.
                     val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
-                    val file = File(context.getExternalFilesDir(null), name)
+                    val dir = context.getExternalFilesDir(null)
+                    if (dir == null) {
+                        onError(ErrorResponse.parseError("No external files directory available"))
+                        return
+                    }
+                    val file = File(dir, name)
                     // Only the download is inside the try, so an exception from
                     // the caller's own callback propagates.
                     val error = try {
@@ -1936,6 +1958,7 @@ object ZeroBounceSDK {
      * body cut short. It carries status 0, and the key is redacted from the
      * platform's message, which can quote the request URL.
      */
+    @JvmSynthetic
     internal fun transportError(call: Call, e: IOException): ErrorResponse {
         val keys = requestKeys(call.request())
         // Every spelling of the key (raw, URL-encoded, JSON-escaped), then the
@@ -1954,6 +1977,7 @@ object ZeroBounceSDK {
      * {"error": "Invalid API key ..."}. Every response handler reports through
      * this, so every error built from a body goes through it.
      */
+    @JvmSynthetic
     internal fun redacting(call: Call, errorCallback: (ErrorResponse?) -> Unit): (ErrorResponse?) -> Unit {
         val keys = requestKeys(call.request())
         return { error -> errorCallback(error?.redacted(keys)) }
@@ -1967,6 +1991,7 @@ object ZeroBounceSDK {
      *
      * @return the body, or null when the read failed and was reported
      */
+    @JvmSynthetic
     internal fun readBody(call: Call, response: Response, errorCallback: (ErrorResponse?) -> Unit): String? =
         try {
             bodyText(response)
@@ -2073,50 +2098,19 @@ object ZeroBounceSDK {
         })
     }
 
-    /**
-     * Determines if the context calling has the required permission.
-     *
-     * @param context the app context
-     * @param permission the permission to check
-     *
-     * @return *true* if the app has the granted permission, or *false* otherwise
-     */
-    private fun hasPermission(context: Context, permission: String): Boolean {
-        val res = context.checkCallingOrSelfPermission(permission)
-
-        return res == PackageManager.PERMISSION_GRANTED
-    }
-
-    /**
-     * Determines if the context calling has the required permissions.
-     *
-     * @param context the app context
-     * @param permissions the permissions to check
-     *
-     * @return *true* if the app has the granted permissions, or *false* otherwise
-     */
-    private fun hasPermissions(context: Context, permissions: Array<String>): Boolean {
-        var hasAllPermissions = true
-
-        for (permission in permissions) {
-            // you can return false instead of assigning, but by assigning you can log all
-            // permission values
-            if (!hasPermission(context, permission)) {
-                hasAllPermissions = false
-            }
-        }
-        return hasAllPermissions
-    }
-
     @JvmSynthetic
     internal fun priority3ApiKey(): String? = apiKey
 
+    @JvmSynthetic
     internal fun priority3ApiBaseUrl(): String = apiBaseUrl
 
+    @JvmSynthetic
     internal fun priority3BulkApiBaseUrl(): String = bulkApiBaseUrl
 
+    @JvmSynthetic
     internal fun priority3BulkApiRootUrl(): String = bulkApiRootUrl
 
+    @JvmSynthetic
     internal fun priority3ListEvaluatorBaseUrl(): String = listEvaluatorBaseUrl
 
     /**
@@ -2126,12 +2120,14 @@ object ZeroBounceSDK {
      * host than the upload and the result whenever the List Evaluator base is
      * overridden.
      */
+    @JvmSynthetic
     internal fun priority3SendEvaluatedFileUrl(): String {
         val resolved = listEvaluatorBaseUrl.trimEnd('/').toHttpUrlOrNull()
             ?.resolve("send-evaluated-file/")
         return resolved?.toString() ?: "$bulkApiBaseUrl/send-evaluated-file/"
     }
 
+    @JvmSynthetic
     internal fun priority3InboxPlacementBaseUrl(): String = inboxPlacementBaseUrl
 
     /**
@@ -2150,10 +2146,13 @@ object ZeroBounceSDK {
         inboxPlacementBaseUrl = url.trimEnd('/')
     }
 
+    @JvmSynthetic
     internal fun priority3EmailFinderBaseUrl(): String = "$bulkApiRootUrl/email-finder"
 
+    @JvmSynthetic
     internal fun priority3DomainSearchBaseUrl(): String = "$bulkApiRootUrl/domain-search"
 
+    @JvmSynthetic
     internal fun encQuery(value: String): String = enc(value)
 
     /**
@@ -2163,10 +2162,13 @@ object ZeroBounceSDK {
      * a query string but means a literal plus in a path, so the file id and the
      * Inbox Placement test id use this instead.
      */
+    @JvmSynthetic
     internal fun encPathSegment(value: String): String = enc(value).replace("+", "%20")
 
+    @JvmSynthetic
     internal fun priority3Client(): OkHttpClient = client
 
+    @JvmSynthetic
     internal fun <T : JSONConvertable> priority3Get(
         urlPath: String,
         queryParameters: Map<String, String>,
@@ -2194,6 +2196,7 @@ object ZeroBounceSDK {
         })
     }
 
+    @JvmSynthetic
     internal fun priority3GetJson(
         urlPath: String,
         queryParameters: Map<String, String>,
@@ -2227,6 +2230,7 @@ object ZeroBounceSDK {
      * Unlike the rest of the SDK this one takes camelCase JSON bodies and uses
      * PUT and DELETE as well as GET and POST, so it builds the request itself.
      */
+    @JvmSynthetic
     internal fun priority3JsonRequest(
         method: String,
         url: String,
@@ -2275,6 +2279,7 @@ object ZeroBounceSDK {
         })
     }
 
+    @JvmSynthetic
     internal fun priority3FormPostJson(
         url: String,
         formFields: Map<String, String>,
@@ -2301,6 +2306,7 @@ object ZeroBounceSDK {
         })
     }
 
+    @JvmSynthetic
     internal fun priority3FormPost(
         url: String,
         formFields: Map<String, String>,
@@ -2310,6 +2316,7 @@ object ZeroBounceSDK {
         requestFormPost(url, formFields, responseCallback, errorCallback)
     }
 
+    @JvmSynthetic
     internal fun priority3EnqueueMultipart(
         url: String,
         body: MultipartBody,
@@ -2332,6 +2339,7 @@ object ZeroBounceSDK {
         })
     }
 
+    @JvmSynthetic
     internal fun priority3RawDownloadCallback(
         downloadPath: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
@@ -2363,18 +2371,39 @@ object ZeroBounceSDK {
 }
 
 internal class SdkState {
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var apiKey: String? = null
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var apiKeyProblem: String? = null
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    @field:JvmSynthetic
     lateinit var client: OkHttpClient
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var transportInterceptor: Interceptor? = null
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var apiBaseUrl = "https://api.zerobounce.net/v2"
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var bulkApiBaseUrl = "https://bulkapi.zerobounce.net/v2"
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var bulkApiScoringBaseUrl = "https://bulkapi.zerobounce.net/v2/scoring"
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var bulkApiRootUrl = "https://bulkapi.zerobounce.net"
 
     // The list evaluator and the Inbox Placement Tester have their own base
     // URLs, not paths built from the bulk one. Overriding apiBaseUrl alone
     // leaves them pointing at the live API.
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var listEvaluatorBaseUrl = "https://bulkapi.zerobounce.net/v2/listevaluator"
+    @get:JvmSynthetic
+    @set:JvmSynthetic
     var inboxPlacementBaseUrl = "https://bulkapi.zerobounce.net/api/ipt"
 }
