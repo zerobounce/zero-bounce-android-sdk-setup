@@ -254,7 +254,9 @@ internal class Priority3Api {
             mapOf("api_key" to key),
             responseCallback,
             errorCallback,
-            messageOnlyIsFailure = true,
+            // The documented success can be a bare message: passed through as data, like the
+            // Java SDK and standard.md (message-only exemptions, 2026-11-14).
+            messageOnlyIsFailure = false,
         )
     }
 

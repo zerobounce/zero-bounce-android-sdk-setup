@@ -2,6 +2,7 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
@@ -57,7 +58,21 @@ class OfflineErrorsAuditTest {
 
     /** Methods whose success may legitimately be a bare message. */
     private fun exempt(name: String) = name == "validate" || name.endsWith("Filter") || name == "listFilters" ||
-        name.contains("InboxPlacement")
+        name.contains("InboxPlacement") || name == "getListEvaluatorResult"
+
+    @Test
+    fun theListEvaluatorResultPassesAMessageOnlyAnswerThrough() {
+        // standard.md: the list-evaluator result is exempt from the message-only rule, as in Java.
+        for (body in listOf("""{"message":"Evaluation in progress"}""", """{"Message":"x"}""", "{}")) {
+            var ok: JsonElement? = null
+            var error: ErrorResponse? = null
+            val done = java.util.concurrent.CountDownLatch(1)
+            client(body).getListEvaluatorResult("f1", { ok = it; done.countDown() }, { error = it; done.countDown() })
+            assertTrue(done.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(body, null, error)
+            assertEquals(body, com.google.gson.JsonParser.parseString(body), ok)
+        }
+    }
 
     @Test
     fun aMessageOnly200IsAnErrorOnEveryTypedCall() {
