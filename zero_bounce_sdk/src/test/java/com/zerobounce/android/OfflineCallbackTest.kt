@@ -1,8 +1,8 @@
 package com.zerobounce.android
 
 import android.content.Context
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
@@ -315,7 +315,7 @@ class OfflineCallbackTest {
                 // Refused before any request, so the error callback ran synchronously.
                 assertNotNull(error.get())
                 assertEquals(
-                    listOf("api_key has surrounding whitespace or control characters"),
+                    listOf("api_key has whitespace, control or invisible characters"),
                     error.get()!!.errors,
                 )
                 assertEquals(0, error.get()!!.statusCode)

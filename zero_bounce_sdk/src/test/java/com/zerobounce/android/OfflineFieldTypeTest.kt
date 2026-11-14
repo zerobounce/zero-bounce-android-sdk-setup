@@ -9,8 +9,8 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -219,7 +219,8 @@ class OfflineFieldTypeTest {
         for ((type, methods) in typedMethods().groupBy { responseType(it) }) {
             val list = type is ParameterizedType && type.rawType == List::class.java
             val model = if (list) rawClass((type as ParameterizedType).actualTypeArguments[0]) else rawClass(type)
-            val base = documented[model]?.first() ?: "{}"
+            // "{}" alone is a message-only body, an error; a score answer carries its fields.
+            val base = documented[model]?.first() ?: """{"email":"a@example.com","score":1}"""
             // The base alone is a valid answer, so each failure below is the wrong field's.
             run(methods, if (list) "[$base]" else base, expectSuccess(failures))
             for (field in modelFields(model)) {

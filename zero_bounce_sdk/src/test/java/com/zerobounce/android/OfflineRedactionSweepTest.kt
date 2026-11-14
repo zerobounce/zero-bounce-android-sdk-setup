@@ -3,8 +3,8 @@ package com.zerobounce.android
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -40,7 +40,7 @@ class OfflineRedactionSweepTest {
      * `"`, `\`, `%` and a space) and that Gson's HTML-safe escaping changes
      * (`= < > & '`), so each of its spellings (see [forms]) differs from every other.
      */
-    private val key = "echo+key/12\"34%56 7=<>&'\\890"
+    private val key = "echo+key/12\"34%56~7=<>&'\\890"
 
     /** The SMTP password the Warmup sweep sends to testSmtpConfiguration. */
     private val password = RequestSweep.SMTP_PASSWORD
@@ -124,8 +124,11 @@ class OfflineRedactionSweepTest {
         for (secret in listOf(key, password)) {
             // 5 bases x 3 URL encodings, and 4 x 4 double escapes less the 4
             // where the plain escape of an HTML-safe one repeats its HTML-safe
-            // escape (nothing HTML-sensitive is left to tell them apart).
-            assertEquals(forms(secret).toString(), 15 + 12, forms(secret).size)
+            // escape (nothing HTML-sensitive is left to tell them apart). The key
+            // has no space (initialize refuses one), so its `+` and `%20` URL
+            // spellings coincide: 5 fewer.
+            val expected = if (secret == key) 15 + 12 - 5 else 15 + 12
+            assertEquals(forms(secret).toString(), expected, forms(secret).size)
         }
     }
 

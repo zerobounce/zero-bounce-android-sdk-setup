@@ -6,6 +6,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonParseException
 import java.lang.reflect.Type
 import java.text.ParseException
+import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -52,12 +53,14 @@ class GsonDateDeserializer : JsonDeserializer<Date?> {
         parseIso8601(dateString.trim())?.let { return it }
         // SimpleDateFormat is not thread-safe and responses are parsed on
         // OkHttp's threads, so each call builds its own formats.
+        // Strict: no rolling over of 2026-02-31, and the whole text must be read
+        // (SimpleDateFormat.parse(String) stops at the first unread character).
+        val text = dateString.trim()
         for (pattern in PATTERNS) {
-            try {
-                return SimpleDateFormat(pattern, Locale.ROOT).parse(dateString)
-            } catch (_: ParseException) {
-                continue
-            }
+            val format = SimpleDateFormat(pattern, Locale.ROOT).apply { isLenient = false }
+            val position = ParsePosition(0)
+            val date = format.parse(text, position)
+            if (date != null && position.index == text.length) return date
         }
         throw ParseException("Unparseable date: \"$dateString\"", 0)
     }
@@ -90,8 +93,23 @@ class GsonDateDeserializer : JsonDeserializer<Date?> {
             val match = ISO_8601.matchEntire(text) ?: return null
             val g = match.groupValues
             val offset = g[8]
+            // Reject impossible fields (month 13, 2026-02-31, hour 24, minute 60) instead of
+            // rolling them over; checked in UTC, where no local time is skipped or repeated.
+            val check = GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.ROOT).apply {
+                isLenient = false
+                clear()
+                set(g[1].toInt(), g[2].toInt() - 1, g[3].toInt(), g[4].toInt(), g[5].toInt(), g[6].toInt())
+            }
+            try {
+                check.timeInMillis
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
+            if (offset.isNotEmpty() && offset != "Z" && offset != "z") {
+                val digits = offset.substring(1).replace(":", "")
+                if (digits.substring(0, 2).toInt() > 23 || (digits.length > 2 && digits.substring(2, 4).toInt() > 59)) return null
+            }
             val zone = if (offset.isEmpty()) TimeZone.getDefault() else TimeZone.getTimeZone("UTC")
-            // Lenient, as SimpleDateFormat is by default.
             val calendar = GregorianCalendar(zone, Locale.ROOT).apply {
                 clear()
                 set(g[1].toInt(), g[2].toInt() - 1, g[3].toInt(), g[4].toInt(), g[5].toInt(), g[6].toInt())

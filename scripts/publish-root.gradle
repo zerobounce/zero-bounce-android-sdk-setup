@@ -22,7 +22,15 @@ if (secretPropsFile.exists()) {
     // Read local.properties file first if it exists
     Properties p = new Properties()
     new FileInputStream(secretPropsFile).withCloseable { is -> p.load(is) }
-    p.each { name, value -> ext[name] = value }
+    // A blank value (a key present but empty, as in a template) counts as absent: it must not
+    // replace the '' defaults with a signing value that cannot work, nor hide an environment value.
+    p.each { name, value -> if (value?.toString()?.trim()) ext[name] = value }
+    // Fall back to the environment for whatever local.properties leaves out.
+    [centralTokenUsername: 'CENTRAL_TOKEN_USERNAME', centralTokenPassword: 'CENTRAL_TOKEN_PASSWORD',
+     'signing.keyId': 'SIGNING_KEY_ID', 'signing.password': 'SIGNING_PASSWORD', 'signing.key': 'SIGNING_KEY'
+    ].each { prop, envName ->
+        if (!p.getProperty(prop)?.trim()) ext[prop] = System.getenv(envName)
+    }
 } else {
     // Use system environment variables
     ext["centralTokenUsername"] = System.getenv('CENTRAL_TOKEN_USERNAME')

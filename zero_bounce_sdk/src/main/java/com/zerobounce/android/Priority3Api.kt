@@ -165,6 +165,10 @@ internal class Priority3Api {
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
+        downloadTargetError(downloadPath)?.let {
+            errorCallback(it)
+            return
+        }
         val key = ZeroBounceSDK.priority3ApiKey() ?: return
         val url =
             "$baseUrl/getfile?api_key=${ZeroBounceSDK.encQuery(key)}&file_id=${ZeroBounceSDK.encQuery(fileId)}"
@@ -250,6 +254,7 @@ internal class Priority3Api {
             mapOf("api_key" to key),
             responseCallback,
             errorCallback,
+            messageOnlyIsFailure = true,
         )
     }
 
@@ -349,6 +354,7 @@ internal class Priority3Api {
             params,
             responseCallback,
             errorCallback,
+            messageOnlyIsFailure = true,
         )
     }
 
@@ -608,6 +614,10 @@ internal class Priority3Api {
     ) {
         if (!file.exists()) {
             errorCallback(ErrorResponse.parseError("File does not exist"))
+            return
+        }
+        if (!file.isFile) {
+            errorCallback(ErrorResponse(errors = arrayListOf("File is not a regular file: ${file.path}")))
             return
         }
         val key = ZeroBounceSDK.priority3ApiKey() ?: return

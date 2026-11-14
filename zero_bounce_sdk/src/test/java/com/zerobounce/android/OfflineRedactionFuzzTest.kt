@@ -3,8 +3,8 @@ package com.zerobounce.android
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -35,8 +35,8 @@ class OfflineRedactionFuzzTest {
     private lateinit var dir: File
     private lateinit var csv: File
 
-    /** A key with a space, `" / \ + % & = < > '`: every encoding changes it. */
-    private val key = "fz+k/1\"2%3 4=<>&'\\5"
+    /** A key with `" / \ + % & = < > '`, no space (initialize refuses one): every encoding changes it. */
+    private val key = "fz+k/1\"2%3~4=<>&'\\5"
     private val password = RequestSweep.SMTP_PASSWORD
 
     @Before

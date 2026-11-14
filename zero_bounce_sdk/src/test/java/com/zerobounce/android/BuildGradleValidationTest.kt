@@ -22,7 +22,7 @@ class BuildGradleValidationTest {
         val COORDINATES_ALLOWED_TO_MATCH = listOf(
             "org.jetbrains.dokka",
             "org.jetbrains.dokka-javadoc",
-            "com.nhaarman.mockitokotlin2:mockito-kotlin",
+            "org.mockito.kotlin:mockito-kotlin",
         )
     }
 

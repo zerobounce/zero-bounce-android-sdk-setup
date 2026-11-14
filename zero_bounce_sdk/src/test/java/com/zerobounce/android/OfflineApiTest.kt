@@ -2,8 +2,8 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.JsonParser
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -94,7 +94,7 @@ class OfflineApiTest {
         assertEquals("GET", request.method)
         assertEquals("/v2/validate", request.path)
         assertEquals("person@example.com", request.fields["email"])
-        assertEquals("", request.fields["ip_address"])
+        assertFalse(request.fields.containsKey("ip_address"))
         assertEquals("false", request.fields["activity_data"])
         assertEquals("true", request.fields["verify_plus"])
         assertFalse(request.fields.containsKey("timeout"))
@@ -757,19 +757,16 @@ class OfflineApiTest {
             ZeroBounceSDK.findEmail("Ada", responseCallback = ok, errorCallback = err)
         }
         assertTrue(missingDomain.errorText()!!.contains("domain"))
-        var threw = false
-        try {
+        val badIndex = await<ZBSendFileResponse> { ok, err ->
             ZeroBounceSDK.sendFile(
                 context = context,
                 file = csvFile,
                 emailAddressColumnIndex = 0,
-                responseCallback = {},
-                errorCallback = {},
+                responseCallback = ok,
+                errorCallback = err,
             )
-        } catch (_: ZBException) {
-            threw = true
         }
-        assertTrue(threw)
+        assertTrue(badIndex.errorText()!!.contains("emailAddressColumnIndex"))
         assertEquals(0, fake.size())
     }
 

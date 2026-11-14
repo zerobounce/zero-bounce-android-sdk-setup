@@ -81,6 +81,28 @@ dokka {
     }
 }
 
+// Dokka 2.2.0 resolves jackson 2.15.3, freemarker 2.3.32 and jsoup 1.16.1 for its generator, all with
+// published advisories. The generator runs in the release job (centralBundle), where the signing
+// secrets are present, so raise those to patched releases on every Dokka configuration. Drop an entry
+// once Dokka itself ships a fixed version.
+def dokkaPatched = [
+        'com.fasterxml.jackson.core:jackson-databind': '2.22.4',
+        'com.fasterxml.jackson.core:jackson-core'    : '2.22.4',
+        'com.fasterxml.jackson.core:jackson-annotations': '2.22',
+        'com.fasterxml.jackson.module:jackson-module-kotlin': '2.22.4',
+        'org.freemarker:freemarker'                  : '2.3.35',
+        'org.jsoup:jsoup'                            : '1.24.1',
+]
+configurations.matching { it.name.startsWith('dokka') }.configureEach { configuration ->
+    configuration.resolutionStrategy.eachDependency { details ->
+        def patched = dokkaPatched["${details.requested.group}:${details.requested.name}".toString()]
+        if (patched != null) {
+            details.useVersion patched
+            details.because 'Dokka generator dependency with published advisories'
+        }
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'
@@ -94,10 +116,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 
     testImplementation 'com.squareup.okhttp3:mockwebserver:5.5.0'
-    testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0'
-    testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
-    testImplementation 'org.powermock:powermock-core:2.0.9'
-    testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
+    testImplementation 'org.mockito.kotlin:mockito-kotlin:6.4.0'
 
     tasks.named('dokkaGeneratePublicationJavadoc').configure {
         dependsOn(':zero_bounce_sdk:generateReleaseRFile')
@@ -116,7 +135,7 @@ tasks.withType(Javadoc).configureEach {
 // never run it. Run it by hand with keys in the environment:
 //
 //   ZEROBOUNCE_API_KEY=... ZEROBOUNCE_WARMUP_API_KEY=... \
-//     gradle :zero_bounce_sdk:liveApi
+//     gradle :zero_bounce_sdk:liveApi -PzbLive
 tasks.withType(Test).configureEach {
     if (!project.hasProperty('zbLive')) {
         exclude '**/LiveApiTest*'

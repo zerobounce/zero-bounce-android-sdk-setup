@@ -19,9 +19,14 @@ RUN yes | sdkmanager --licenses 2>/dev/null || true \
 
 WORKDIR /app
 
-COPY . .
+# Owned by the unprivileged user the tests run as, so Gradle can write build output into /app.
+COPY --chown=65532:65532 . .
 
 # Run unit tests for the SDK library only (no emulator)
+
+# The unprivileged user has no home directory: give Gradle (and the tools that read $HOME) a writable one.
+RUN mkdir -p /home/gradle && chown 65532:65532 /home/gradle /app
+ENV HOME=/home/gradle GRADLE_USER_HOME=/home/gradle/.gradle
 
 USER 65532:65532
 

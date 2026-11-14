@@ -1,7 +1,7 @@
 package com.zerobounce.android
 
 import android.content.Context
-import com.nhaarman.mockitokotlin2.mock
+import org.mockito.kotlin.mock
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol

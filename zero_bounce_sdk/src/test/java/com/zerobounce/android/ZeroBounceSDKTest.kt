@@ -3,7 +3,7 @@ package com.zerobounce.android
 import android.content.Context
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.GsonBuilder
-import com.nhaarman.mockitokotlin2.mock
+import org.mockito.kotlin.mock
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer

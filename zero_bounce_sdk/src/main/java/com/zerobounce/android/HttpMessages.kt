@@ -11,7 +11,7 @@ import java.io.OutputStream
 import java.net.URLEncoder
 
 internal fun looksLikeHtml(body: String): Boolean {
-    val head = body.take(2000).lowercase()
+    val head = body.take(2000).lowercase(java.util.Locale.ROOT)
     return "<!doctype html" in head || "<html" in head || "<head" in head || "<body" in head
 }
 
@@ -36,7 +36,7 @@ internal fun redactSecrets(text: String, secrets: Iterable<String?>): String {
     for (secret in secrets) {
         if (secret.isNullOrEmpty()) continue
         for (form in secretForms(secret)) {
-            value = value.replace(form, "***")
+            value = value.replace(form, "***", ignoreCase = true)
         }
     }
     // A server can nest those encodings in more ways than any list of spellings
@@ -65,7 +65,7 @@ internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
     val seen = hashSetOf(text)
     var layer = listOf(text)
     for (depth in 0..4) {
-        if (layer.any { view -> wanted.any { view.contains(it) } }) return true
+        if (layer.any { view -> wanted.any { view.contains(it, ignoreCase = true) } }) return true
         if (depth == 4) break
         layer = layer.flatMap { listOf(percentDecoded(it, false), percentDecoded(it, true), jsonUnescaped(it)) }
             .filter { seen.add(it) }
@@ -99,7 +99,7 @@ private fun percentDecoded(text: String, plusIsSpace: Boolean): String {
     return bytes.toString("UTF-8")
 }
 
-/** Undoes JSON string escapes (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\u` and four hex digits). */
+/** Undoes JSON string escapes (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\'` and `\u` with four hex digits). */
 private fun jsonUnescaped(text: String): String {
     if ('\\' !in text) return text
     val out = StringBuilder(text.length)
@@ -112,9 +112,9 @@ private fun jsonUnescaped(text: String): String {
             continue
         }
         val escape = text[i + 1]
-        val simple = "\"\\/bfnrt".indexOf(escape)
+        val simple = "\"\\/bfnrt'".indexOf(escape)
         if (simple >= 0) {
-            out.append("\"\\/\b\u000c\n\r\t"[simple])
+            out.append("\"\\/\b\u000c\n\r\t'"[simple])
             i += 2
         } else if (escape == 'u' && i + 5 < text.length && (2..5).all { hexValue(text[i + it].code) >= 0 }) {
             out.append(text.substring(i + 2, i + 6).toInt(16).toChar())
@@ -295,10 +295,12 @@ internal fun ErrorResponse.redacted(secrets: Iterable<String?>): ErrorResponse {
     // text holds a secret.
     @Suppress("UNCHECKED_CAST")
     val messages = errors as MutableList<Any?>
-    messages.replaceAll { message ->
-        val text = message?.toString() ?: return@replaceAll message
+    // An index loop, not List.replaceAll: that method needs API 24 and the SDK's minSdk is 21.
+    for (i in messages.indices) {
+        val message = messages[i]
+        val text = message?.toString() ?: continue
         val redacted = redactSecrets(text, secrets)
-        if (redacted == text) message else redacted
+        if (redacted != text) messages[i] = redacted
     }
     return this
 }
@@ -383,7 +385,7 @@ private val MESSAGE_KEYS = setOf("error", "message", "error_message", "Message",
  */
 internal fun messageOnlyError(statusCode: Int, body: String): ErrorResponse? {
     val parsed = objectWithoutSuccess(body) ?: return null
-    if (parsed.size() == 0 || !parsed.keySet().all { it in MESSAGE_KEYS }) return null
+    if (!parsed.keySet().all { it in MESSAGE_KEYS }) return null
     val text = parsed.keySet().firstNotNullOfOrNull { messageText(parsed.get(it)) }
     return ErrorResponse(
         errors = arrayListOf(text ?: "ZeroBounce returned an error with no message text."),
@@ -457,22 +459,68 @@ internal fun parseFailure(statusCode: Int, body: String?, cause: Exception): Err
     return httpError(statusCode, body)
 }
 
+/** A UTF-8 byte-order mark, which some servers put before a JSON error. */
+private const val BOM = '\uFEFF'
+
+/** [text] without a leading byte-order mark. */
+internal fun stripBom(text: String): String = text.removePrefix(BOM.toString())
+
+/** Whether [contentType] is `application/json` or any `+json` type (`application/problem+json`). */
+internal fun isJsonContentType(contentType: String?): Boolean {
+    val type = contentType.orEmpty().substringBefore(';').trim().lowercase(java.util.Locale.ROOT)
+    return type == "application/json" || type.endsWith("+json")
+}
+
+/**
+ * Whether a download body is JSON, not a results file: a JSON object or array
+ * after an optional byte-order mark, whatever its content type. A CSV never
+ * parses as one.
+ */
+internal fun looksLikeJsonDownload(text: String): Boolean {
+    val trimmed = stripBom(text).trim()
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false
+    return try {
+        val parsed = JsonParser.parseString(trimmed)
+        parsed.isJsonObject || parsed.isJsonArray
+    } catch (_: Exception) {
+        false
+    }
+}
+
 internal fun downloadRejected(statusCode: Int, contentType: String, bytes: ByteArray): Boolean {
     if (statusCode > 299 || isHtmlContentType(contentType)) return true
-    val text = bytes.toString(Charsets.UTF_8)
+    val text = stripBom(bytes.toString(Charsets.UTF_8))
     if (text.isBlank() || looksLikeHtml(text)) return true
-    if (contentType.contains("application/json", ignoreCase = true)) return true
-    return Priority3Api.looksLikeJsonError(text)
+    if (isJsonContentType(contentType)) return true
+    return looksLikeJsonDownload(text) || Priority3Api.looksLikeJsonError(text)
 }
 
 /** How much of a download is looked at before deciding whether it is a file or an error. */
 private const val DOWNLOAD_SNIFF_BYTES = 8192L
 
 /**
+ * Why [path] cannot be a download target, or null when it can: blank, ending in
+ * a separator, or an existing directory. Checked before the request is sent, so
+ * nothing is asked of the server for a file that cannot be saved.
+ */
+internal fun downloadTargetError(path: String?): ErrorResponse? {
+    if (path.isNullOrBlank()) {
+        return ErrorResponse(errors = arrayListOf("download_path must not be blank"))
+    }
+    if (path.endsWith("/") || path.endsWith(File.separator)) {
+        return ErrorResponse(errors = arrayListOf("download_path must be a file path, not a directory: $path"))
+    }
+    if (File(path).isDirectory) {
+        return ErrorResponse(errors = arrayListOf("download_path is a directory: $path"))
+    }
+    return null
+}
+
+/**
  * Saves a bulk results download to [file], streaming it to disk rather than
  * holding the whole file in memory. A response that is, or may be, an error
  * instead of a file (an error status, a JSON content type, an empty body, an
- * HTML page, or a body that starts with `{`) is read whole and checked with
+ * HTML page, or a body that starts with `{` or `[`) is read whole and checked with
  * [downloadRejected]; those are small.
  *
  * @return the error to report, or null when the file was saved
@@ -483,17 +531,19 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
     val code = response.code
     val contentType = response.body.contentType()?.toString()
         ?: response.header("Content-Type").orEmpty()
-    val head = response.peekBody(DOWNLOAD_SNIFF_BYTES).bytes().toString(Charsets.UTF_8)
+    downloadTargetError(file.path)?.let { return it }
+    val head = stripBom(response.peekBody(DOWNLOAD_SNIFF_BYTES).bytes().toString(Charsets.UTF_8))
     val mayBeError = code > 299 ||
-        contentType.contains("application/json", ignoreCase = true) ||
+        isJsonContentType(contentType) ||
         isHtmlContentType(contentType) ||
         head.isBlank() ||
         looksLikeHtml(head) ||
-        head.trimStart().startsWith("{")
+        head.trimStart().startsWith("{") ||
+        head.trimStart().startsWith("[")
     if (mayBeError) {
         val bytes = response.body.bytes()
         if (downloadRejected(code, contentType, bytes)) {
-            val text = bytes.toString(Charsets.UTF_8)
+            val text = stripBom(bytes.toString(Charsets.UTF_8))
             // A text/html content type on a 2xx is a proxy's page, whatever the body.
             val error = if (code <= 299 && isHtmlContentType(contentType)) {
                 htmlPageError(code, text)
@@ -501,7 +551,7 @@ internal fun saveDownload(response: Response, file: File): ErrorResponse? {
                 httpError(code, text)
             }
             if (error.errors.isEmpty()) {
-                // {"success": false} with no message.
+                // {"success": false} with no message, or a JSON array.
                 error.errors = arrayListOf("ZeroBounce returned an error instead of the file (HTTP $code).")
             }
             return error
@@ -523,12 +573,28 @@ internal var downloadFileOpener: (File) -> OutputStream = { FileOutputStream(it)
  * part-way (a full disk, a file size limit) leaves whatever was at [file]
  * untouched, and no partial file behind (D4).
  */
-private fun writeDownload(file: File, write: (OutputStream) -> Unit) {
-    val dir = file.absoluteFile.parentFile
+private fun writeDownload(requested: File, write: (OutputStream) -> Unit) {
+    // A symbolic link at the target is written through: the real file is
+    // replaced and the link stays.
+    val file = try {
+        requested.canonicalFile
+    } catch (_: IOException) {
+        requested.absoluteFile
+    }
+    val dir = file.parentFile
     dir?.mkdirs()
-    val temp = File.createTempFile(".${file.name}.", ".part", dir)
+    if (dir != null && !dir.canWrite()) {
+        throw IOException("Cannot write ${requested.path} (permission denied)")
+    }
+    val temp = try {
+        File.createTempFile(".${file.name}.", ".part", dir)
+    } catch (e: IOException) {
+        throw IOException("Cannot write ${requested.path} (${e.message ?: "permission denied"})")
+    }
     try {
         downloadFileOpener(temp).use(write)
+        // A file that is already there keeps its permissions.
+        if (file.exists()) copyPermissions(file, temp)
         // rename replaces an existing file on Android (POSIX); a platform that
         // will not rename over a file gets the old one removed first.
         if (!temp.renameTo(file) && !(file.delete() && temp.renameTo(file))) {
@@ -539,13 +605,28 @@ private fun writeDownload(file: File, write: (OutputStream) -> Unit) {
     }
 }
 
+/** Gives [to] the permissions of [from]: exact POSIX bits where the platform has them, owner bits otherwise. */
+private fun copyPermissions(from: File, to: File) {
+    try {
+        val perms = java.nio.file.Files.getPosixFilePermissions(from.toPath())
+        java.nio.file.Files.setPosixFilePermissions(to.toPath(), perms)
+        return
+    } catch (_: Throwable) {
+        // No java.nio.file (API < 26) or not POSIX: fall through.
+    }
+    to.setReadable(from.canRead(), true)
+    to.setWritable(from.canWrite(), true)
+    to.setExecutable(from.canExecute(), true)
+}
+
 private fun htmlTitle(body: String): String {
-    val lower = body.lowercase()
-    val start = lower.indexOf("<title")
+    // Searched in the original text, ignoring case: a lower-cased copy can be longer
+    // (U+0130 becomes two chars), and its indexes would cut the original in the wrong place.
+    val start = body.indexOf("<title", ignoreCase = true)
     if (start < 0) return ""
-    val openEnd = lower.indexOf('>', start)
+    val openEnd = body.indexOf('>', start)
     if (openEnd < 0) return ""
-    val close = lower.indexOf("</title>", openEnd)
+    val close = body.indexOf("</title>", openEnd, ignoreCase = true)
     if (close < 0) return ""
     return body.substring(openEnd + 1, close).trim()
 }
@@ -567,3 +648,24 @@ private fun cloudflareTitle(body: String): String? {
         null
     }
 }
+
+/** Why [initialize][ZeroBounceSDK.initialize] refuses an API key with whitespace, control or invisible characters. */
+internal const val API_KEY_CHARACTERS_PROBLEM = "api_key has whitespace, control or invisible characters"
+
+/** The fixed message when a key cannot be written into an HTTP header (OkHttp's own message quotes the value). */
+internal const val API_KEY_HEADER_PROBLEM = "api_key has characters that cannot be sent in an HTTP header"
+
+/**
+ * Whether [key] holds a character that no real key has and that could be hidden
+ * or mangled in a log or a header: any whitespace (Unicode ones included, such as
+ * NBSP and U+2003), a control character, or a format character (Unicode category
+ * Cf: zero-width space and joiner, BOM, word joiner, U+180E, bidi marks).
+ */
+internal fun hasUnsafeKeyCharacters(key: String): Boolean =
+    key.codePoints().anyMatch {
+        Character.isISOControl(it) || Character.isWhitespace(it) || Character.isSpaceChar(it) ||
+            Character.getType(it) == Character.FORMAT.toInt()
+    }
+
+/** Whether [key] can be a header value as is: visible ASCII only (0x21 to 0x7E). */
+internal fun isHeaderSafeKey(key: String): Boolean = key.all { it.code in 0x21..0x7E }

@@ -46,13 +46,18 @@ class ZeroBounceWarmup {
     }
 
     private val gson = Gson()
+    @Volatile
     private var apiKey: String = ""
+
+    @Volatile
     private var root: String = DEFAULT_BASE_URL + BASE_PATH
 
     /** Why the client is unusable, or null when it is ready. */
+    @Volatile
     private var setupProblem: String? =
         "ZeroBounceWarmup is not initialized. Call initialize(apiKey) first"
 
+    @Volatile
     private var client: OkHttpClient = buildClient(null)
 
     /**
@@ -75,26 +80,33 @@ class ZeroBounceWarmup {
     /**
      * Stores the Warmup API key, and optionally a custom https base URL.
      *
-     * A key with surrounding whitespace or control characters, or a base URL
+     * A key with whitespace, control, invisible or non-ASCII characters, or a base URL
      * that is not https, is rejected here: every later call then fails with
      * that message rather than sending the key anywhere.
      */
     @JvmOverloads
     fun initialize(apiKey: String, baseUrl: String = DEFAULT_BASE_URL) {
-        client = buildClient(transportInterceptor)
-        this.apiKey = apiKey
-        setupProblem = when {
+        // Everything is checked before anything is stored: a refused key or URL
+        // leaves the client and the base URL as they were, and no call goes on
+        // with the old key (every later call reports the problem instead).
+        val problem = when {
             apiKey.isBlank() -> "api_key is required"
-            // A key with surrounding whitespace or control characters would be
-            // quoted, unredacted, in the transport's own error.
-            apiKey != apiKey.trim() || apiKey.any { it.isISOControl() } ->
-                "api_key has surrounding whitespace or control characters"
+            // Such a key would be quoted, unredacted, in the transport's own
+            // error, or be refused by OkHttp as a header value.
+            hasUnsafeKeyCharacters(apiKey) -> API_KEY_CHARACTERS_PROBLEM
+            !isHeaderSafeKey(apiKey) -> API_KEY_HEADER_PROBLEM
             !baseUrl.lowercase().startsWith("https://") -> "base_url must be an https:// URL"
             else -> null
         }
-        if (setupProblem == null) {
-            root = baseUrl.trimEnd('/') + BASE_PATH
+        if (problem != null) {
+            this.apiKey = ""
+            setupProblem = problem
+            return
         }
+        client = buildClient(transportInterceptor)
+        root = baseUrl.trimEnd('/') + BASE_PATH
+        this.apiKey = apiKey
+        setupProblem = null
     }
 
     // -- sending accounts ----------------------------------------------------
@@ -706,7 +718,14 @@ class ZeroBounceWarmup {
         val builder = Request.Builder()
             .url(url(path, query))
             .header("Accept", "application/json")
-            .header("API-Key", apiKey)
+        // OkHttp's message for a value it cannot write as a header quotes the
+        // value, which is the key: report a fixed one instead.
+        try {
+            builder.header("API-Key", apiKey)
+        } catch (e: IllegalArgumentException) {
+            errorCallback(ErrorResponse.parseError(API_KEY_HEADER_PROBLEM))
+            return
+        }
         val payload = body?.let {
             gson.toJson(it).toRequestBody("application/json".toMediaTypeOrNull())
         }
@@ -790,6 +809,11 @@ class ZeroBounceWarmup {
                 errorCallback(redacted(httpError(statusCode, text), secrets))
                 return@send
             }
+            // A JSON null is not a result (it would reach the caller as null).
+            if (parsed.isJsonNull) {
+                errorCallback(ErrorResponse(errors = arrayListOf(WRONG_SHAPE), statusCode = statusCode))
+                return@send
+            }
             responseCallback(parsed)
         }
     }
@@ -801,8 +825,12 @@ class ZeroBounceWarmup {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         send("GET", path, query, null, emptyList(), errorCallback) { statusCode, contentType, text ->
-            if (text.isBlank() || contentType.lowercase().contains("application/json")) {
-                errorCallback(redacted(httpError(statusCode, text), emptyList()))
+            if (text.isBlank() || isJsonContentType(contentType) || looksLikeJsonDownload(text)) {
+                val error = httpError(statusCode, stripBom(text))
+                if (error.errors.isEmpty()) {
+                    error.errors = arrayListOf("ZeroBounce returned an error instead of the file (HTTP $statusCode).")
+                }
+                errorCallback(redacted(error, emptyList()))
             } else if (looksLikeHtml(text) || contentType.lowercase().contains("text/html")) {
                 // An HTML page on a 200 (a proxy's or Cloudflare's block page)
                 // is not a CSV, whether its content type or its body gives it away.

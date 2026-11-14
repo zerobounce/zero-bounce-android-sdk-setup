@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: ${{ matrix.java }}
           distribution: 'temurin'
@@ -38,6 +38,10 @@ jobs:
       # Execute unit tests.
       - name: Run unit tests
         run: ./gradlew zero_bounce_sdk:testDebugUnitTest
+
+      # Android lint, at the SDK's minSdk: it fails on a call to an API newer than minSdk 21.
+      - name: Run lint
+        run: ./gradlew :zero_bounce_sdk:lintDebug
 
       # Build a debug version to test that the sdk compiles.
       - name: Generate release build

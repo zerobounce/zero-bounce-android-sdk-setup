@@ -2,8 +2,8 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.JsonElement
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.junit.Test
 import java.io.File
 import java.time.LocalDate

@@ -7,7 +7,7 @@ import com.google.gson.annotations.SerializedName
  * The model class for the GET /deletefile request.
  */
 data class ZBDeleteFileResponse(
-    val success: Boolean? = false,
+    val success: Boolean? = null,
 
     @JsonAdapter(StrictTypes.TextOrListOfText::class)
     val message: String? = null,

@@ -3,7 +3,6 @@ package com.zerobounce.android
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -102,7 +101,6 @@ object ZeroBounceSDK {
     private const val READ_EXTERNAL_STORAGE = Manifest.permission.READ_EXTERNAL_STORAGE
     private const val WRITE_EXTERNAL_STORAGE = Manifest.permission.WRITE_EXTERNAL_STORAGE
     private val STORAGE_PERMISSIONS = arrayOf(READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE)
-    private var logEnabled = false
 
     // The documented limits of the Inbox Placement Tester.
     private const val MAX_INBOX_PLACEMENT_NAME = 64
@@ -157,9 +155,9 @@ object ZeroBounceSDK {
         // from a file with its newline, say) is not stored, so it is never sent
         // or quoted, unredacted, in a transport error; every call reports why,
         // as ZeroBounceWarmup does. An empty key is still "not initialized".
-        if (apiKey.isNotBlank() && (apiKey != apiKey.trim() || apiKey.any { it.isISOControl() })) {
+        if (apiKey.isNotBlank() && hasUnsafeKeyCharacters(apiKey)) {
             this.apiKey = null
-            apiKeyProblem = "api_key has surrounding whitespace or control characters"
+            apiKeyProblem = API_KEY_CHARACTERS_PROBLEM
         } else {
             this.apiKey = apiKey
             apiKeyProblem = null
@@ -183,12 +181,6 @@ object ZeroBounceSDK {
         return "$base?$query"
     }
 
-    private fun redactedBody(body: String?): String {
-        if (body.isNullOrEmpty()) return ""
-        if (looksLikeHtml(body) || body.length > 500) return "omitted (${body.length} chars)"
-        return body
-    }
-
     /**
      * Hands a JSON response to the caller. Only [parse] runs inside the try: a
      * body the SDK cannot decode reaches [errorCallback], while an exception
@@ -201,6 +193,7 @@ object ZeroBounceSDK {
         body: String?,
         errorCallback: (ErrorResponse?) -> Unit,
         parse: (String) -> R,
+        messageOnlyIsFailure: Boolean = true,
         deliver: (R) -> Unit,
     ) {
         // A 2xx whose content type is text/html is a proxy's or Cloudflare's
@@ -213,6 +206,15 @@ object ZeroBounceSDK {
             errorCallback(httpError(statusCode, body))
             return
         }
+        // A 2xx that is nothing but a message ({"message": ...}, {"detail": ...}, {}) is an
+        // error on every typed call; validate's greylist answer and the raw-JSON calls
+        // (the filters, whose documented success is a message) are exempt.
+        if (messageOnlyIsFailure && statusCode <= 299) {
+            messageOnlyError(statusCode, body!!)?.let {
+                errorCallback(it)
+                return
+            }
+        }
         val parsed = try {
             parse(body!!.trim())
         } catch (e: Exception) {
@@ -222,6 +224,10 @@ object ZeroBounceSDK {
         deliver(parsed)
     }
 
+    /** A raw-JSON call's body; a JSON `null` is not a result. */
+    private fun parseJsonValue(body: String): JsonElement =
+        JsonParser.parseString(body).also { if (it.isJsonNull) throw WrongShapeException() }
+
     private fun accountLevelBatchError(response: ZBValidateBatchResponse?): String? {
         val entry = response?.errors?.firstOrNull { it["email_address"]?.toString() == "all" }
             ?: return null
@@ -229,7 +235,40 @@ object ZeroBounceSDK {
     }
 
     internal fun safeFileName(raw: String?): String? =
-        raw?.substringAfterLast('/')?.takeIf { it.isNotBlank() && it != "." && it != ".." }
+        raw?.substringAfterLast('/')?.substringAfterLast('\\')
+            ?.takeIf { it.isNotBlank() && it != "." && it != ".." }
+
+    /**
+     * The file name in a Content-Disposition header: `filename*=UTF-8''...`
+     * (percent-decoded) wins over `filename=`, whose quotes are removed.
+     * Null when the header names none.
+     */
+    internal fun contentDispositionFileName(header: String?): String? {
+        if (header == null) return null
+        val params = Regex("""(filename\*?)\s*=\s*("(?:[^"\\]|\\.)*"|[^;]*)""", RegexOption.IGNORE_CASE)
+            .findAll(header).toList()
+        fun unquote(v: String): String {
+            val t = v.trim()
+            return if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
+                t.substring(1, t.length - 1).replace("\\\"", "\"")
+            } else {
+                t
+            }
+        }
+        params.firstOrNull { it.groupValues[1].equals("filename*", ignoreCase = true) }?.let { m ->
+            val v = unquote(m.groupValues[2])
+            val rest = v.substringAfter('\'', "").substringAfter('\'', "")
+            val charset = v.substringBefore('\'').ifBlank { "UTF-8" }
+            val decoded = try {
+                java.net.URLDecoder.decode(rest.replace("+", "%2B"), charset)
+            } catch (_: Exception) {
+                null
+            }
+            if (!decoded.isNullOrBlank()) return decoded
+        }
+        return params.firstOrNull { it.groupValues[1].equals("filename", ignoreCase = true) }
+            ?.let { unquote(it.groupValues[2]) }
+    }
 
     /**
      * Validates the given [email].
@@ -263,14 +302,15 @@ object ZeroBounceSDK {
         if (options != null && !checkValidateTimeout(options.timeout, errorCallback)) return
         if (!checkCallbackUrl(options, errorCallback)) return
 
-        val ipAddressPart = ipAddress ?: ""
+        // Sent only when there is one: an empty ip_address= is not "no address".
+        val ipAddressPart = ipAddress?.takeIf { it.isNotBlank() }
         if (options?.usePost == true) {
             val key = apiKey ?: return
             val fields = mutableMapOf(
                 "api_key" to key,
                 "email" to email,
-                "ip_address" to ipAddressPart,
             )
+            ipAddressPart?.let { fields["ip_address"] = it }
             options.timeout?.let { fields["timeout"] = it.toString() }
             options.activityData?.let { fields["activity_data"] = if (it) "true" else "false" }
             options.verifyPlus?.let { fields["verify_plus"] = if (it) "true" else "false" }
@@ -281,15 +321,16 @@ object ZeroBounceSDK {
                 url = "$apiBaseUrl/validate",
                 formFields = fields,
                 responseCallback = responseCallback,
-                errorCallback = errorCallback
+                errorCallback = errorCallback,
+                messageOnlyIsFailure = false,
             )
             return
         }
         val params = mutableListOf(
             "api_key" to (apiKey ?: ""),
             "email" to email,
-            "ip_address" to ipAddressPart,
         )
+        ipAddressPart?.let { params += "ip_address" to it }
         if (options != null) {
             options.timeout?.let { params += "timeout" to it.toString() }
             options.activityData?.let { params += "activity_data" to if (it) "true" else "false" }
@@ -302,7 +343,9 @@ object ZeroBounceSDK {
             url = urlWithQuery("$apiBaseUrl/validate", params),
             body = null,
             responseCallback = responseCallback,
-            errorCallback = errorCallback
+            errorCallback = errorCallback,
+            // validate's greylist answer {"Message": "..."} is a result.
+            messageOnlyIsFailure = false,
         )
     }
 
@@ -453,7 +496,6 @@ object ZeroBounceSDK {
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback,
-            messageOnlyIsFailure = true,
         )
     }
 
@@ -502,7 +544,6 @@ object ZeroBounceSDK {
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback,
-            messageOnlyIsFailure = true,
         )
     }
 
@@ -542,7 +583,6 @@ object ZeroBounceSDK {
             body = null,
             responseCallback = responseCallback,
             errorCallback = errorCallback,
-            messageOnlyIsFailure = true,
         )
     }
 
@@ -812,7 +852,9 @@ object ZeroBounceSDK {
         }
 
         if (emailAddressColumnIndex < 1) {
-            throw ZBException("Index for emailAddressColumnIndex must start from 1.")
+            // Reported like every other bad argument, before any request is sent.
+            errorCallback(ErrorResponse.parseError("Index for emailAddressColumnIndex must start from 1."))
+            return
         }
 
         val builder = MultipartBody.Builder()
@@ -862,9 +904,6 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                if (logEnabled) {
-                    Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                }
 
                 acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
@@ -872,12 +911,6 @@ object ZeroBounceSDK {
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                if (logEnabled) {
-                    Log.d(
-                        "ZeroBounceSDK",
-                        "sendFile error=$e}"
-                    )
-                }
                 errorCallback(transportError(call, e))
             }
         })
@@ -903,7 +936,9 @@ object ZeroBounceSDK {
     ) {
         if (invalidApiKey(errorCallback)) return
         if (emailAddressColumnIndex < 1) {
-            throw ZBException("Index for emailAddressColumnIndex must start from 1.")
+            // Reported like every other bad argument, before any request is sent.
+            errorCallback(ErrorResponse.parseError("Index for emailAddressColumnIndex must start from 1."))
+            return
         }
 
         val fileBody = inputStream.readBytes().toRequestBody("text/csv".toMediaTypeOrNull())
@@ -934,14 +969,12 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                if (logEnabled) Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
                 acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<ZBSendFileResponse>() }) {
                     responseCallback(it)
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                if (logEnabled) Log.d("ZeroBounceSDK", "sendFile error=$e")
                 errorCallback(transportError(call, e))
             }
         })
@@ -1115,9 +1148,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 response.use {
-                    val fileName =
-                        it.headers["content-disposition"]?.substringAfter("filename=")
-                            ?.substringBefore(";")
+                    val fileName = contentDispositionFileName(it.headers["content-disposition"])
                     // Only the last path component of the server's name is
                     // used, so the file stays inside the app's files directory.
                     val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
@@ -1128,6 +1159,8 @@ object ZeroBounceSDK {
                         saveDownload(it, file)
                     } catch (e: IOException) {
                         transportError(call, e)
+                    } catch (e: RuntimeException) {
+                        transportError(call, IOException(e.message ?: e.javaClass.simpleName))
                     }
                     if (error != null) {
                         onError(error)
@@ -1881,7 +1914,7 @@ object ZeroBounceSDK {
         // form OkHttp writes it in a query.
         var message = redactSecrets(redactSecret(e.message ?: e.javaClass.simpleName), keys)
         for (key in keys) {
-            message = message.replace(encQuery(key), "***")
+            message = message.replace(encQuery(key), "***", ignoreCase = true)
         }
         return ErrorResponse(errors = arrayListOf(message))
     }
@@ -1928,7 +1961,7 @@ object ZeroBounceSDK {
         body: Map<String, Any>?,
         crossinline responseCallback: (response: T?) -> Unit,
         crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-        messageOnlyIsFailure: Boolean = false,
+        messageOnlyIsFailure: Boolean = true,
     ) where T : JSONConvertable = requestWithStatus<T>(
         url = url,
         body = body,
@@ -1947,11 +1980,8 @@ object ZeroBounceSDK {
         body: Map<String, Any>?,
         crossinline responseCallback: (response: T?, statusCode: Int) -> Unit,
         crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-        messageOnlyIsFailure: Boolean = false,
+        messageOnlyIsFailure: Boolean = true,
     ) where T : JSONConvertable {
-        if (logEnabled) {
-            Log.d("ZeroBounceSDK", "request url: ${redactSecret(url)}")
-        }
 
         val requestBuilder = Request.Builder()
             .url(url)
@@ -1969,17 +1999,8 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                if (logEnabled) {
-                    Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                }
 
-                // The email finder and domain search: see messageOnlyError.
-                val messageOnly = if (messageOnlyIsFailure && response.code <= 299) messageOnlyError(response.code, json) else null
-                if (messageOnly != null) {
-                    onError(messageOnly)
-                    return
-                }
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }, messageOnlyIsFailure = messageOnlyIsFailure) {
                     responseCallback(it, response.code)
                 }
             }
@@ -1994,11 +2015,9 @@ object ZeroBounceSDK {
         url: String,
         formFields: Map<String, String>,
         crossinline responseCallback: (response: T?) -> Unit,
-        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit
+        crossinline errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        messageOnlyIsFailure: Boolean = true,
     ) where T : JSONConvertable {
-        if (logEnabled) {
-            Log.d("ZeroBounceSDK", "request url: ${redactSecret(url)}")
-        }
 
         val formBuilder = FormBody.Builder()
         for ((name, value) in formFields) {
@@ -2014,11 +2033,8 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                if (logEnabled) {
-                    Log.d("ZeroBounceSDK", "response: ${redactedBody(json)}")
-                }
 
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }, messageOnlyIsFailure = messageOnlyIsFailure) {
                     responseCallback(it)
                 }
             }
@@ -2040,12 +2056,6 @@ object ZeroBounceSDK {
     private fun hasPermission(context: Context, permission: String): Boolean {
         val res = context.checkCallingOrSelfPermission(permission)
 
-        if (logEnabled) {
-            Log.v(
-                "ZeroBounce", "permission: " + permission + " = \t\t" +
-                        if (res == PackageManager.PERMISSION_GRANTED) "GRANTED" else "DENIED"
-            )
-        }
         return res == PackageManager.PERMISSION_GRANTED
     }
 
@@ -2160,6 +2170,7 @@ object ZeroBounceSDK {
         queryParameters: Map<String, String>,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+        messageOnlyIsFailure: Boolean = false,
     ) {
         val query = queryParameters.entries.joinToString("&") { (k, v) ->
             "${enc(k)}=${enc(v)}"
@@ -2170,7 +2181,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { parseJsonValue(it) }, messageOnlyIsFailure = messageOnlyIsFailure) {
                     responseCallback(it)
                 }
             }
@@ -2196,7 +2207,14 @@ object ZeroBounceSDK {
         extraHeaders: Map<String, String> = emptyMap(),
     ) {
         val builder = Request.Builder().url(url).header("Accept", "application/json")
-        extraHeaders.forEach { (name, value) -> builder.header(name, value) }
+        // OkHttp's message for a value it cannot write as a header quotes the
+        // value, and here that is the key: report a fixed one instead.
+        try {
+            extraHeaders.forEach { (name, value) -> builder.header(name, value) }
+        } catch (e: IllegalArgumentException) {
+            errorCallback(ErrorResponse.parseError(API_KEY_HEADER_PROBLEM))
+            return
+        }
         val payload = body?.let {
             gson.toJson(it).toRequestBody("application/json".toMediaTypeOrNull())
         }
@@ -2217,7 +2235,7 @@ object ZeroBounceSDK {
                     responseCallback(null)
                     return
                 }
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { parseJsonValue(it) }, messageOnlyIsFailure = false) {
                     responseCallback(it)
                 }
             }
@@ -2243,7 +2261,7 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { JsonParser.parseString(it) }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { parseJsonValue(it) }, messageOnlyIsFailure = false) {
                     responseCallback(it)
                 }
             }
@@ -2298,6 +2316,8 @@ object ZeroBounceSDK {
                     saveDownload(it, file)
                 } catch (e: IOException) {
                     transportError(call, e)
+                } catch (e: RuntimeException) {
+                    transportError(call, IOException(e.message ?: e.javaClass.simpleName))
                 }
                 if (error != null) {
                     onError(error)
