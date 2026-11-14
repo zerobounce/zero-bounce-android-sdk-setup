@@ -40,11 +40,11 @@ data class ZBValidateResponse(
 
     // [true/false] If the email comes from a free provider.
     @SerializedName("free_email")
-    val freeEmail: Boolean = false,
+    val freeEmail: Boolean? = null,
 
     // [true/false] Does the domain have an MX record.
     @SerializedName("mx_found")
-    val mxFound: Boolean = false,
+    val mxFound: Boolean? = null,
 
     // The preferred MX record of the domain
     @SerializedName("mx_record")

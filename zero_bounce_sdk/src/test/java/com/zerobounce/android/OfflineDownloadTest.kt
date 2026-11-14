@@ -1,8 +1,8 @@
 package com.zerobounce.android
 
 import android.content.Context
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,11 +28,13 @@ class OfflineDownloadTest {
     fun setUp() {
         dir = File(System.getProperty("java.io.tmpdir"), "zb-android-download-${System.nanoTime()}")
         dir.mkdirs()
+        nioPermissionsAvailable = { true } // the JVM has java.nio.file; SDK_INT reads 0 here
         whenever(context.getExternalFilesDir(null)).thenReturn(dir)
     }
 
     @After
     fun tearDown() {
+        nioPermissionsAvailable = { android.os.Build.VERSION.SDK_INT >= 26 }
         dir.setWritable(true)
         dir.deleteRecursively()
     }

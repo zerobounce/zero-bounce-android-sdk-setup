@@ -4,7 +4,7 @@ buildscript {
     // CodeQL supports Kotlin below 2.3.30; keep kotlin-gradle-plugin pinned here (see dependabot.yml).
     ext.kotlin_version = '2.3.21'
     repositories {
-        maven { url "https://plugins.gradle.org/m2/" }
+        maven { url = "https://plugins.gradle.org/m2/" }
         google()
         mavenCentral()
     }
@@ -20,10 +20,19 @@ buildscript {
     configurations.classpath {
         resolutionStrategy {
             force 'org.bouncycastle:bcprov-jdk18on:1.87',
+                    'org.bouncycastle:bcpkix-jdk18on:1.87',
+                    'org.bouncycastle:bcutil-jdk18on:1.87',
                     'org.jdom:jdom2:2.0.6.1',
                     'org.bitbucket.b_c:jose4j:0.9.7',
                     'com.google.guava:guava:33.8.0-jre',
                     'org.apache.commons:commons-lang3:3.22.0'
+            // Same patched Jackson as the Dokka plugin classpath in zero_bounce_sdk/build.gradle.
+            eachDependency { details ->
+                if (details.requested.group.startsWith('com.fasterxml.jackson')) {
+                    details.useVersion(details.requested.name == 'jackson-annotations' ? '2.22' : '2.22.4')
+                    details.because 'Jackson with published advisories'
+                }
+            }
         }
     }
 }

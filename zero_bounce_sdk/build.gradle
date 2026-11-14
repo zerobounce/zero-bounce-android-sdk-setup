@@ -1,5 +1,18 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// The Dokka Gradle plugin brings Jackson 2.15.3 (15 advisories) onto this module's plugin classpath.
+// Raise it to a patched release; drop this once Dokka's plugin ships a fixed version.
+buildscript {
+    configurations.classpath {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group.startsWith('com.fasterxml.jackson')) {
+                details.useVersion(details.requested.name == 'jackson-annotations' ? '2.22' : '2.22.4')
+                details.because 'Dokka plugin dependency with published advisories'
+            }
+        }
+    }
+}
+
 plugins {
     id 'com.android.library'
     // kotlin-android removed: AGP 9.0+ has built-in Kotlin support (https://kotl.in/gradle/agp-built-in-kotlin)
@@ -61,7 +74,7 @@ android {
         }
     }
 
-    namespace 'com.zerobounce.android'
+    namespace = 'com.zerobounce.android'
 }
 
 dokka {

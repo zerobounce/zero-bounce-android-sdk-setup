@@ -50,7 +50,7 @@ class ZeroBounceSDKTest {
         ZeroBounceSDK.bulkApiBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiScoringBaseUrl = server.url("/").toString()
         ZeroBounceSDK.bulkApiRootUrl = server.url("/").toString()
-        ZeroBounceSDK.initialize(API_KEY, apiBaseUrl = server.url("/").toString())
+        ZeroBounceSDK.initializeAllowingLoopback(API_KEY, apiBaseUrl = server.url("/").toString())
     }
 
     @Test
@@ -2180,10 +2180,13 @@ class ZeroBounceSDKTest {
     }
 
     @Test
-    fun isAllowedApiBaseUrl_httpsAndLoopbackOnly() {
+    fun isAllowedApiBaseUrl_httpsOnlyUnlessTheTestSeamAllowsLoopback() {
         assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("https://api.zerobounce.net/v2"))
-        assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("http://127.0.0.1:8080/"))
-        assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl("http://localhost:8080/"))
+        for (loopback in listOf("http://127.0.0.1:8080/", "http://localhost:8080/", "http://[::1]:8080/")) {
+            assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl(loopback))
+            assertTrue(ZeroBounceSDK.isAllowedApiBaseUrl(loopback, allowLoopbackHttp = true))
+        }
+        assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("http://evil.example/", allowLoopbackHttp = true))
         assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("http://evil.example/"))
         assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("file:///etc/passwd"))
     }

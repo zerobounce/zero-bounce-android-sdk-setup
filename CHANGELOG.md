@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Repository only: the example app compiles against API 37, as the SDK requires of every consumer (`compileSdk = 37`); with 36 its `checkDebugAarMetadata` failed, so the app did not build.
+- **Behaviour change:** `ZeroBounceSDK.initialize` and `ZeroBounceClient.initialize` now refuse every non-https base URL, including `http://localhost`, `127.0.0.1` and `::1` (before, loopback http was accepted). `setListEvaluatorBaseUrl` and `setInboxPlacementBaseUrl` follow the same rule.
+- **Behaviour change:** `ZBValidateResponse.freeEmail` and `mxFound` are now `Boolean?`. A response without `free_email` / `mx_found` (or with null) reads `null` instead of `false`, as in the Java SDK. Kotlin callers that used them as `Boolean` must handle null.
+- Repository only: the Dokka Gradle plugin's classpath (Jackson 2.15.3, 15 advisories) is raised to Jackson 2.22.4 on the root and `:zero_bounce_sdk` build classpaths, and the whole Bouncy Castle family (`bcprov`, `bcpkix`, `bcutil`) is forced to 1.87 (`bcpkix` and `bcutil` stayed on 1.79). Dokka still generates offline.
+- Repository only: Gradle 10 deprecations from this repo are gone (`prop value` assignments in `build.gradle`, `app/build.gradle`, `zero_bounce_sdk/build.gradle` and `scripts/publish-module.gradle`, and the Project used as a dependency notation).
+- Repository only: the example app no longer includes the `com.android.support:multidex` library or `multiDexEnabled` (not needed at minSdk 23); the "multidex library is included but not needed" CI message is gone.
+- The README and `documentation.md` show `findDomain` instead of the deprecated `guessFormat` for the domain format example, and the README states the Kotlin floor (Kotlin 2.2 or newer; the library is compiled with Kotlin 2.3, whose metadata Kotlin 2.2 can still read).
 - Removed the SDK's dead debug logging (`logEnabled` was never true, and the `sendFile` message had a stray `}`). The SDK no longer references `android.util.Log`; a test now asserts that.
 - Repository only: tests use `org.mockito.kotlin:mockito-kotlin` 6.4.0 instead of the unmaintained `com.nhaarman.mockitokotlin2` and PowerMock (which no test used). The deprecated `android.enableJetifier` and `android.nonFinalResIds` options are removed.
 - Repository only: CI's "Test & Lint" job now runs lint. The CodeQL workflow installs the same Android platform and build-tools as the build (37), has only `contents: read` at the top level, and `publish.yml` passes the tag input to its script through the environment. The `setup-java` comments name v6.1.0.
@@ -20,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Android 5 and 6 (API 21-23): `initialize` no longer crashes with `NoSuchMethodError`; the API key check no longer uses `String.codePoints()` (API 24).
+- Saving a download over an existing file no longer calls `java.nio.file` below Android 8 (API 26) without a version check; lint is clean.
+- `sendFile(InputStream...)`, `scoringSendFile(InputStream...)` and the priority-3 stream uploads: an input stream that throws `IOException` used to throw at the caller with no callback. It now reaches the error callback (status 0) and no request is sent.
 - `ZeroBounceWarmup.initialize` validates the key and base URL before storing anything. A refused key or URL leaves the previous client and base URL untouched and clears the key, so calls report the problem rather than going on with the old key. Its fields are now `@Volatile`.
 - **Behaviour change:** a 200 answer that is only a message (`{"message": "..."}`, `{"Message": ...}`, `{"detail": ...}`, or `{}`) used to be reported as a success on typed calls (file sends, file status, delete, finder and domain-search files, S3/SFTP jobs, list evaluator, validateBatch, getApiUsage, getActivityData, scoreEmail). It is now an error with status 200 and the message text. validate's greylist `{"Message": ...}` answer, the filters calls and Inbox Placement are unchanged.
 - **Behaviour change:** a JSON `null` body used to reach the success callback as `null` on the filters, Inbox Placement and Warmup calls. It is now an error ("not the shape this call returns").
@@ -197,19 +207,51 @@ The details are under Changed and Fixed below.
 - A custom API base URL must be `https://`, except `http://localhost` in tests.
 - HTTP calls time out (connect 30 seconds, read and write 120 seconds).
 
+## [2.1.4] - 2026-08-14
+
+### Changed
+
+- Dependency, Gradle wrapper (9.6.0) and CI action updates only; no change to the SDK's behaviour.
+
+## [2.1.3] - 2026-06-09
+
+### Changed
+
+- Kotlin is pinned to 2.3.21 (CodeQL compatibility) and the build and CodeQL workflow were adjusted to match; no change to the SDK's behaviour.
+
 ## [2.1.2] - 2026-06-09
 
 ### Added
 
 - `ZBValidateResponse.catchallDomain`, read from `catchall_domain`.
 
-## [2.0.17] - 2026-03-03
+## [2.1.0] - 2026-04-05
+
+### Added
+
+- Bulk validation file sends take `allowPhase2` (sent as `allow_phase_2`).
+- `getFile` takes `downloadType` (`ZBDownloadType`: `PHASE_1`, `PHASE_2`, `COMBINED`) and `activityData`, and a 200 JSON answer from `getfile` is reported as an error instead of being saved.
+- `ZBFileStatusResponse` carries the phase 2 file status.
+
+## [2.0.21] - 2026-03-04
+
+### Changed
+
+- Release workflow changes only (this was the last of the 2.0.18 to 2.0.21 workflow-only releases; 2.0.19 and 2.0.20 were never published).
+
+## [2.0.18] - 2026-03-04
+
+### Changed
+
+- Added the Maven Central publish workflow. No change to the SDK's code.
+
+## [2.0.17] - 2026-03-03 (tagged, never published)
 
 ### Changed
 
 - License the project under MIT.
 
-## [1.5.1] - 2026-02-18
+## [1.5.1] - 2026-02-18 (tagged, never published)
 
 ### Added
 
@@ -254,7 +296,12 @@ The details are under Changed and Fixed below.
 [3.0.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.3.0...v3.0.0
 [2.3.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.1.4...v2.2.0
+[2.1.4]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.1.3...v2.1.4
+[2.1.3]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.1.1...v2.1.2
+[2.1.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.21...v2.1.0
+[2.0.21]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.18...v2.0.21
+[2.0.18]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.17...v2.0.18
 [2.0.17]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v2.0.0...v2.0.17
 [1.5.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.5.0...v1.5.1
 [1.2.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v1.1.6...v1.2.1

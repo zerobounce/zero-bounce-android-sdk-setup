@@ -918,7 +918,7 @@ class OfflineApiTest {
                     .setBody("go away")
             )
             ZeroBounceSDK.transportInterceptor = null
-            ZeroBounceSDK.initialize("redir-key", api.url("/v2").toString().trimEnd('/'))
+            ZeroBounceSDK.initializeAllowingLoopback("redir-key", api.url("/v2").toString().trimEnd('/'))
             assertFalse(ZeroBounceSDK.client.followRedirects)
             assertFalse(ZeroBounceSDK.client.followSslRedirects)
             val outcome = await<ZBCreditsResponse> { ok, err -> ZeroBounceSDK.getCredits(ok, err) }

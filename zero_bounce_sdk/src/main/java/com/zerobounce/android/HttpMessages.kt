@@ -1,5 +1,7 @@
 package com.zerobounce.android
 
+import android.annotation.TargetApi
+import android.os.Build
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
@@ -605,14 +607,25 @@ private fun writeDownload(requested: File, write: (OutputStream) -> Unit) {
     }
 }
 
+/** Whether java.nio.file exists on this platform (API 26+); a unit test on the JVM replaces it. */
+internal var nioPermissionsAvailable: () -> Boolean = { Build.VERSION.SDK_INT >= 26 }
+
+// Only reached when nioPermissionsAvailable() is true, i.e. on API 26+.
+@TargetApi(26)
+private fun copyPosixPermissions(from: File, to: File) {
+    val perms = java.nio.file.Files.getPosixFilePermissions(from.toPath())
+    java.nio.file.Files.setPosixFilePermissions(to.toPath(), perms)
+}
+
 /** Gives [to] the permissions of [from]: exact POSIX bits where the platform has them, owner bits otherwise. */
 private fun copyPermissions(from: File, to: File) {
-    try {
-        val perms = java.nio.file.Files.getPosixFilePermissions(from.toPath())
-        java.nio.file.Files.setPosixFilePermissions(to.toPath(), perms)
-        return
-    } catch (_: Throwable) {
-        // No java.nio.file (API < 26) or not POSIX: fall through.
+    if (nioPermissionsAvailable()) {
+        try {
+            copyPosixPermissions(from, to)
+            return
+        } catch (_: Throwable) {
+            // Not a POSIX file system: fall through.
+        }
     }
     to.setReadable(from.canRead(), true)
     to.setWritable(from.canWrite(), true)
@@ -662,10 +675,20 @@ internal const val API_KEY_HEADER_PROBLEM = "api_key has characters that cannot 
  * Cf: zero-width space and joiner, BOM, word joiner, U+180E, bidi marks).
  */
 internal fun hasUnsafeKeyCharacters(key: String): Boolean =
-    key.codePoints().anyMatch {
-        Character.isISOControl(it) || Character.isWhitespace(it) || Character.isSpaceChar(it) ||
-            Character.getType(it) == Character.FORMAT.toInt()
+    unsafeKeyCharacterScan(key)
+
+// A plain loop: String.codePoints() is API 24 and the minSdk is 21.
+private fun unsafeKeyCharacterScan(key: String): Boolean {
+    var i = 0
+    while (i < key.length) {
+        val cp = Character.codePointAt(key, i)
+        if (Character.isISOControl(cp) || Character.isWhitespace(cp) || Character.isSpaceChar(cp) ||
+            Character.getType(cp) == Character.FORMAT.toInt()
+        ) return true
+        i += Character.charCount(cp)
     }
+    return false
+}
 
 /** Whether [key] can be a header value as is: visible ASCII only (0x21 to 0x7E). */
 internal fun isHeaderSafeKey(key: String): Boolean = key.all { it.code in 0x21..0x7E }

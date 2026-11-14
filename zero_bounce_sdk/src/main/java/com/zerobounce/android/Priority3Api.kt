@@ -644,7 +644,7 @@ internal class Priority3Api {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
         val key = ZeroBounceSDK.priority3ApiKey() ?: return
-        val fileBody = inputStream.readBytes().toRequestBody("text/csv".toMediaTypeOrNull())
+        val fileBody = ZeroBounceSDK.readUploadStream(inputStream, errorCallback) ?: return
         val builder = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
         for ((name, value) in fields) {

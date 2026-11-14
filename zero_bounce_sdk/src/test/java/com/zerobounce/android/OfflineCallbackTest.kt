@@ -378,6 +378,21 @@ class OfflineCallbackTest {
     }
 
     @Test
+    fun aMissingOrNullFreeEmailAndMxFoundReadAsNullNotFalse() {
+        for (body in listOf(
+            """{"address":"a@example.com","status":"valid"}""",
+            """{"address":"a@example.com","status":"valid","free_email":null,"mx_found":null}""",
+        )) {
+            val (value, error) = outcome<ZBValidateResponse> { ok, err ->
+                client(Canned(200, "application/json", body)).validate("a@example.com", null, ok, err)
+            }
+            assertNull("$body: ${error?.errors}", error)
+            assertNull(body, value!!.freeEmail)
+            assertNull(body, value.mxFound)
+        }
+    }
+
+    @Test
     fun anythingElseInABooleanIsAShortError() {
         for (raw in listOf("\"yes\"", "\"no\"", "\"\"", "2", "-1", "1.5", "\"t\"", "[]", "{}")) {
             val body = """{"address":"a@example.com","status":"valid","free_email":$raw,"padding":"${"x".repeat(2000)}"}"""

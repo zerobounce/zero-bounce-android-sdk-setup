@@ -46,8 +46,11 @@ class ZeroBounceWarmup {
     }
 
     private val gson = Gson()
+    // Internal for tests only; hidden from Java callers (internal is public in bytecode).
     @Volatile
-    private var apiKey: String = ""
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    internal var apiKey: String = ""
 
     @Volatile
     private var root: String = DEFAULT_BASE_URL + BASE_PATH

@@ -89,16 +89,16 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ####### Find the email and other domain formats based on a given domain name
+* ####### Find the email format (pattern) of a domain
     ```kotlin
-    ZeroBounceSDK.guessFormat(
+    ZeroBounceSDK.findDomain(
         domain = "<DOMAIN_TO_TEST>",
         responseCallback = { rsp ->
-            Log.d("MainActivity", "guessFormat rsp: $rsp")
+            Log.d("MainActivity", "findDomain rsp: $rsp")
             // your implementation
         },
         errorCallback = { error ->
-            Log.e("MainActivity", "guessFormat error: $error")
+            Log.e("MainActivity", "findDomain error: $error")
             // your implementation
         }
     )

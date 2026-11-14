@@ -11,7 +11,7 @@
 
 This SDK contains methods for interacting easily with ZeroBounce API.
 More information about ZeroBounce you can find in the [official documentation](https://www.zerobounce.net/docs/). \
-The SDK supports Android 5.0 (API level 21) and later and is compiled for Java 17. Apps that use it need `compileSdk` 37 or higher; building the SDK itself needs JDK 17 or newer.
+The SDK supports Android 5.0 (API level 21) and later and is compiled for Java 17. Apps that use it need `compileSdk` 37 or higher; building the SDK itself needs JDK 17 or newer. Kotlin apps need Kotlin 2.2 or newer: the library is compiled with Kotlin 2.3 (class metadata 2.3.0), and a Kotlin compiler reads metadata at most one minor version ahead of its own. It depends on `kotlin-stdlib` 2.3.21, which Gradle resolves for you. Java apps are not affected.
 
 ### Installation
 You can install ZeroBounceSDK by adding the dependency to your gradle file:
@@ -108,16 +108,16 @@ Then you can use any of the SDK methods, for example:
     )
     ```
 
-* ##### Find the email and other domain formats based on a given domain name
+* ##### Find the email format (pattern) of a domain
     ```kotlin
-    ZeroBounceSDK.guessFormat(
+    ZeroBounceSDK.findDomain(
         domain = "<DOMAIN_TO_TEST>",
         responseCallback = { rsp ->
-            Log.d("MainActivity", "guessFormat rsp: $rsp")
+            Log.d("MainActivity", "findDomain rsp: $rsp")
             // your implementation
         },
         errorCallback = { error ->
-            Log.e("MainActivity", "guessFormat error: $error")
+            Log.e("MainActivity", "findDomain error: $error")
             // your implementation
         }
     )

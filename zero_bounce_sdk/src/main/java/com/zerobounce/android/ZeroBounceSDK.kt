@@ -136,12 +136,23 @@ object ZeroBounceSDK {
      * `https://api-eu.zerobounce.net/v2` both send `validate` to `.../v2/validate`.
      */
     fun initialize(apiKey: String, apiBaseUrl: String? = null) {
+        initializeWith(apiKey, apiBaseUrl, allowLoopbackHttp = false)
+    }
+
+    /** Test-only seam: like [initialize], but a plain-http loopback base URL (a local test server) is accepted. */
+    // @JvmSynthetic: `internal` is public in bytecode; this keeps Java callers from reaching the http seam.
+    @JvmSynthetic
+    internal fun initializeAllowingLoopback(apiKey: String, apiBaseUrl: String? = null) {
+        initializeWith(apiKey, apiBaseUrl, allowLoopbackHttp = true)
+    }
+
+    private fun initializeWith(apiKey: String, apiBaseUrl: String?, allowLoopbackHttp: Boolean) {
         // All or nothing: the base URL is checked before anything is stored,
         // so a call that throws leaves the key, the client and the base URL as
         // they were, and a caller that catches the error cannot go on with a
         // new key on the old URL.
         apiBaseUrl?.let {
-            require(isAllowedApiBaseUrl(it)) { "apiBaseUrl must be an https:// URL" }
+            require(isAllowedApiBaseUrl(it, allowLoopbackHttp)) { "apiBaseUrl must be an https:// URL" }
         }
         val builder = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -165,10 +176,10 @@ object ZeroBounceSDK {
         apiBaseUrl?.let { this.apiBaseUrl = it.trimEnd('/') }
     }
 
-    internal fun isAllowedApiBaseUrl(url: String): Boolean {
+    internal fun isAllowedApiBaseUrl(url: String, allowLoopbackHttp: Boolean = false): Boolean {
         val lower = url.lowercase()
         if (lower.startsWith("https://")) return true
-        if (!lower.startsWith("http://")) return false
+        if (!allowLoopbackHttp || !lower.startsWith("http://")) return false
         val host = url.toHttpUrlOrNull()?.host ?: return false
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
@@ -918,6 +929,23 @@ object ZeroBounceSDK {
     }
 
     @Throws(ZBException::class)
+    /**
+     * Reads a caller's upload stream. A stream that fails is reported to
+     * [errorCallback] (status 0, no request sent) rather than thrown at the caller.
+     */
+    internal fun readUploadStream(
+        inputStream: InputStream,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ): okhttp3.RequestBody? {
+        val bytes = try {
+            inputStream.readBytes()
+        } catch (e: IOException) {
+            errorCallback(ErrorResponse.parseError("Could not read the upload stream (${e.message ?: "I/O error"})."))
+            return null
+        }
+        return bytes.toRequestBody("text/csv".toMediaTypeOrNull())
+    }
+
     private fun sendFileInternalStream(
         scoring: Boolean,
         inputStream: InputStream,
@@ -941,7 +969,7 @@ object ZeroBounceSDK {
             return
         }
 
-        val fileBody = inputStream.readBytes().toRequestBody("text/csv".toMediaTypeOrNull())
+        val fileBody = readUploadStream(inputStream, errorCallback) ?: return
         val builder = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("file", fileName, fileBody)
@@ -2080,6 +2108,7 @@ object ZeroBounceSDK {
         return hasAllPermissions
     }
 
+    @JvmSynthetic
     internal fun priority3ApiKey(): String? = apiKey
 
     internal fun priority3ApiBaseUrl(): String = apiBaseUrl

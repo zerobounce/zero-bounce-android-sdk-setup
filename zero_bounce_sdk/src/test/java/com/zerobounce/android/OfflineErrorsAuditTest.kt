@@ -2,7 +2,7 @@ package com.zerobounce.android
 
 import android.content.Context
 import com.google.gson.Gson
-import com.nhaarman.mockitokotlin2.mock
+import org.mockito.kotlin.mock
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -81,8 +81,11 @@ class OfflineErrorsAuditTest {
         val validate = RequestSweep.requestMethods(ZeroBounceClient::class.java).filter { it.name == "validate" }
         for (method in validate) {
             val outcome = sweep.invoke(client("""{"Message":"Greylist validation still in progress"}"""), method)
-            // Not the message-only error: validate needs address and status, so it is a field error, never a message-only 200 one.
-            assertTrue(outcome.toString(), outcome.errors.none { it?.errors.toString().contains("Greylist") })
+            // validate's greylist answer is a result, not an error: a SUCCESS carrying the Message text.
+            assertTrue(outcome.toString(), outcome.errors.isEmpty())
+            assertEquals(outcome.toString(), 1, outcome.successes.size)
+            val result = outcome.successes[0] as ZBValidateResponse
+            assertEquals("Greylist validation still in progress", result.message)
         }
         val filters = RequestSweep.requestMethods(ZeroBounceClient::class.java).filter { it.name.endsWith("Filter") }
         for (method in filters) {
