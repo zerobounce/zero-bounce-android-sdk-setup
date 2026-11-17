@@ -2189,6 +2189,14 @@ class ZeroBounceSDKTest {
         assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("http://evil.example/", allowLoopbackHttp = true))
         assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("http://evil.example/"))
         assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl("file:///etc/passwd"))
+        for (userinfo in listOf(
+            "https://api.zerobounce.net@evil.example/v2",
+            "https://user:secret@evil.example/v2",
+            "https://@evil.example/v2",
+            "https://:@evil.example/v2",
+        )) {
+            assertTrue(!ZeroBounceSDK.isAllowedApiBaseUrl(userinfo))
+        }
     }
 
     @After

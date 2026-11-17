@@ -120,6 +120,38 @@ class OfflineKeySafetyTest {
     }
 
     @Test
+    fun redactionFoldsAndDecodesBraceEscapes() {
+        assertEquals(CREDENTIAL_OMITTED, redactSecrets("echo STRASSE", listOf("straße")))
+        val secret = "ab'cd"
+        assertTrue(exposesSecret("ab\\u{27}cd", listOf(secret)))
+        assertTrue(exposesSecret("ab\\047cd", listOf(secret)))
+        assertTrue(exposesSecret("ab\\U00000027cd", listOf(secret)))
+        assertFalse(redactSecrets("ab\\u{27}cd", listOf(secret)).contains(secret))
+    }
+
+    @Test
+    fun htmlAfterPaddingIsHtmlAndJsonIsNot() {
+        assertTrue(looksLikeHtml(" ".repeat(2500) + "<html><body>x</body></html>"))
+        assertTrue(looksLikeHtml(" ".repeat(9000) + "<html>"))
+        assertFalse(looksLikeHtml("""{"note":"<body>"}"""))
+    }
+
+    @Test
+    fun savedDownloadNameKeepsTheFileId() {
+        val sdk = ZeroBounceSDK
+        assertEquals("file-1_results.csv", sdk.downloadSavedName("file-1", "attachment; filename=results.csv"))
+        assertEquals("file-2.csv", sdk.downloadSavedName("file-2", null))
+        assertEquals(
+            "file-1_results.csv",
+            sdk.downloadSavedName("file-1", "attachment; filename=results.csv"),
+        )
+        assertFalse(
+            sdk.downloadSavedName("file-1", "attachment; filename=results.csv") ==
+                sdk.downloadSavedName("file-2", "attachment; filename=results.csv"),
+        )
+    }
+
+    @Test
     fun redactionDecodesAnEscapedApostrophe() {
         val secret = "dummy'pass"
         assertTrue(exposesSecret("""{"error":"bad dummy\'pass"}""", listOf(secret)))

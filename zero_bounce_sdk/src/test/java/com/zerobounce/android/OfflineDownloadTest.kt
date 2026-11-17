@@ -193,7 +193,7 @@ class OfflineDownloadTest {
 
     @Test
     fun aServerNamedFileThatIsAnExistingDirectoryIsRefusedByGetFile() {
-        val taken = File(dir, "taken").apply { mkdirs() }
+        val taken = File(dir, "fid_taken").apply { mkdirs() }
         File(taken, "keep").writeText("keep")
         withServer(disposition("attachment; filename=\"taken\"")) { _, client ->
             val r = getFile(client)
@@ -214,12 +214,12 @@ class OfflineDownloadTest {
     @Test
     fun contentDispositionNamesAreParsed() {
         val cases = mapOf(
-            "attachment; filename=\"results.csv\"" to "results.csv",
-            "attachment; filename=results.csv" to "results.csv",
-            "attachment; filename*=UTF-8''r%C3%A9sultats%20v1.csv" to "résultats v1.csv",
-            "attachment; filename=\"fallback.csv\"; filename*=UTF-8''real.csv" to "real.csv",
-            "attachment; filename=\"../../evil.csv\"" to "evil.csv",
-            "attachment; filename=\"a\\b\\c.csv\"" to "c.csv",
+            "attachment; filename=\"results.csv\"" to "fid_results.csv",
+            "attachment; filename=results.csv" to "fid_results.csv",
+            "attachment; filename*=UTF-8''r%C3%A9sultats%20v1.csv" to "fid_résultats v1.csv",
+            "attachment; filename=\"fallback.csv\"; filename*=UTF-8''real.csv" to "fid_real.csv",
+            "attachment; filename=\"../../evil.csv\"" to "fid_evil.csv",
+            "attachment; filename=\"a\\b\\c.csv\"" to "fid_c.csv",
         )
         for ((header, expected) in cases) {
             withServer(disposition(header)) { _, client ->

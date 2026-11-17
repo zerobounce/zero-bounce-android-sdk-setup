@@ -190,8 +190,13 @@ object ZeroBounceSDK {
 
     @JvmSynthetic
     internal fun isAllowedApiBaseUrl(url: String, allowLoopbackHttp: Boolean = false): Boolean {
+        val afterScheme = url.substringAfter("://", missingDelimiterValue = "")
+        if (afterScheme.isEmpty()) return false
+        val authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        if ('@' in authority) return false
         val parsed = url.toHttpUrlOrNull() ?: return false
         if (parsed.host.isEmpty()) return false
+        if (parsed.username.isNotEmpty() || parsed.password.isNotEmpty()) return false
         if (parsed.isHttps) return true
         if (!allowLoopbackHttp) return false
         return parsed.host == "localhost" || parsed.host == "127.0.0.1" || parsed.host == "::1"
@@ -262,6 +267,13 @@ object ZeroBounceSDK {
     internal fun safeFileName(raw: String?): String? =
         raw?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.takeIf { it.isNotBlank() && it != "." && it != ".." }
+
+    @JvmSynthetic
+    internal fun downloadSavedName(fileId: String, contentDisposition: String?): String {
+        val id = safeFileName(fileId) ?: "download"
+        val bare = safeFileName(contentDispositionFileName(contentDisposition))
+        return if (bare != null) "${id}_$bare" else "$id.csv"
+    }
 
     /**
      * The file name in a Content-Disposition header: `filename*=UTF-8''...`
@@ -1193,16 +1205,12 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 response.use {
-                    val fileName = contentDispositionFileName(it.headers["content-disposition"])
-                    // Only the last path component of the server's name is
-                    // used, so the file stays inside the app's files directory.
-                    val name = safeFileName(fileName) ?: "$fileId.csv".substringAfterLast('/')
                     val dir = context.getExternalFilesDir(null)
                     if (dir == null) {
                         onError(ErrorResponse.parseError("No external files directory available"))
                         return
                     }
-                    val file = File(dir, name)
+                    val file = File(dir, downloadSavedName(fileId, it.headers["content-disposition"]))
                     // Only the download is inside the try, so an exception from
                     // the caller's own callback propagates.
                     val error = try {

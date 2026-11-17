@@ -11,11 +11,24 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.net.URLEncoder
+import java.text.Normalizer
+import java.util.Locale
 
 @JvmSynthetic
 internal fun looksLikeHtml(body: String): Boolean {
-    val head = body.take(2000).lowercase(java.util.Locale.ROOT)
-    return "<!doctype html" in head || "<html" in head || "<head" in head || "<body" in head
+    var start = 0
+    while (start < body.length && body[start].isWhitespace()) start++
+    if (start >= body.length) return false
+    if (body[start] == '{' || body[start] == '[') return false
+    val rest = body.substring(start).lowercase(Locale.ROOT)
+    return htmlTag(rest, "<!doctype") || htmlTag(rest, "<html") || htmlTag(rest, "<head") || htmlTag(rest, "<body")
+}
+
+private fun htmlTag(rest: String, tag: String): Boolean {
+    if (!rest.startsWith(tag)) return false
+    if (rest.length == tag.length) return true
+    val next = rest[tag.length]
+    return next.isWhitespace() || next == '>' || next == '/'
 }
 
 @JvmSynthetic
@@ -59,6 +72,33 @@ internal class WrongShapeException : RuntimeException(WRONG_SHAPE)
 /** What a message becomes when a secret is left in it in a spelling [redactSecrets] cannot replace. */
 internal const val CREDENTIAL_OMITTED = "The response body was omitted because it contained a credential."
 
+/** NFD, then the Unicode full case fold (uppercase then lowercase, no locale), then NFD again. U+0307 is dropped only when it follows `i`. */
+private fun folded(text: String): String {
+    val nfd = Normalizer.normalize(text, Normalizer.Form.NFD)
+    val builder = StringBuilder()
+    var index = 0
+    while (index < nfd.length) {
+        val point = nfd.codePointAt(index)
+        val mapped = String(Character.toChars(point)).uppercase(Locale.ROOT).lowercase(Locale.ROOT)
+        builder.append(Normalizer.normalize(mapped, Normalizer.Form.NFD))
+        index += Character.charCount(point)
+    }
+    val folded = builder.toString()
+    val out = StringBuilder()
+    var at = 0
+    while (at < folded.length) {
+        val point = folded.codePointAt(at)
+        val previous = if (out.isEmpty()) 0 else out.codePointBefore(out.length)
+        if (point == 0x307 && previous == 'i'.code) {
+            at += Character.charCount(point)
+            continue
+        }
+        out.appendCodePoint(point)
+        at += Character.charCount(point)
+    }
+    return out.toString()
+}
+
 /**
  * Whether [text], or any view of it decoded up to four times in any order (the
  * SDK's own request encoding plus three layers a server can add; URL-decoding
@@ -71,7 +111,7 @@ internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
     val seen = hashSetOf(text)
     var layer = listOf(text)
     for (depth in 0..4) {
-        if (layer.any { view -> wanted.any { view.contains(it, ignoreCase = true) } }) return true
+        if (layer.any { view -> wanted.any { folded(view).contains(folded(it)) } }) return true
         if (depth == 4) break
         layer = layer.flatMap { listOf(percentDecoded(it, false), percentDecoded(it, true), jsonUnescaped(it)) }
             .filter { seen.add(it) }
@@ -105,15 +145,14 @@ private fun percentDecoded(text: String, plusIsSpace: Boolean): String {
     return bytes.toString("UTF-8")
 }
 
-/** Undoes JSON string escapes (`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\'` and `\u` with four hex digits). */
+/** Undoes JSON string escapes, including `\u{27}`, `\U00000027`, `\x27` and octal `\047`. */
 private fun jsonUnescaped(text: String): String {
     if ('\\' !in text) return text
     val out = StringBuilder(text.length)
     var i = 0
     while (i < text.length) {
-        val c = text[i]
-        if (c != '\\' || i + 1 >= text.length) {
-            out.append(c)
+        if (text[i] != '\\' || i + 1 >= text.length) {
+            out.append(text[i])
             i++
             continue
         }
@@ -122,13 +161,56 @@ private fun jsonUnescaped(text: String): String {
         if (simple >= 0) {
             out.append("\"\\/\b\u000c\n\r\t'"[simple])
             i += 2
-        } else if (escape == 'u' && i + 5 < text.length && (2..5).all { hexValue(text[i + it].code) >= 0 }) {
+            continue
+        }
+        if ((escape == 'u' || escape == 'U') && i + 2 < text.length && text[i + 2] == '{') {
+            var j = i + 3
+            var digits = ""
+            while (j < text.length && digits.length < 8 && hexValue(text[j].code) >= 0) {
+                digits += text[j]
+                j++
+            }
+            if (digits.isNotEmpty() && j < text.length && text[j] == '}') {
+                out.appendCodePoint(digits.toInt(16).coerceIn(0, 0x10FFFF))
+                i = j + 1
+                continue
+            }
+        }
+        if (escape == 'U' && i + 9 < text.length && (2..9).all { hexValue(text[i + it].code) >= 0 }) {
+            val code = text.substring(i + 2, i + 10).toInt(16)
+            if (code <= 0x10FFFF) {
+                out.appendCodePoint(code)
+                i += 10
+                continue
+            }
+        }
+        if ((escape == 'u' || escape == 'U') && i + 5 < text.length && (2..5).all { hexValue(text[i + it].code) >= 0 }) {
             out.append(text.substring(i + 2, i + 6).toInt(16).toChar())
             i += 6
-        } else {
-            out.append(c)
-            i++
+            continue
         }
+        if (escape == 'x' && i + 3 < text.length && hexValue(text[i + 2].code) >= 0 && hexValue(text[i + 3].code) >= 0) {
+            out.append((hexValue(text[i + 2].code) * 16 + hexValue(text[i + 3].code)).toChar())
+            i += 4
+            continue
+        }
+        if (escape in '0'..'7') {
+            var value = escape.code - '0'.code
+            var length = 2
+            if (i + 2 < text.length && text[i + 2] in '0'..'7') {
+                value = value * 8 + (text[i + 2].code - '0'.code)
+                length = 3
+                if (escape <= '3' && i + 3 < text.length && text[i + 3] in '0'..'7') {
+                    value = value * 8 + (text[i + 3].code - '0'.code)
+                    length = 4
+                }
+            }
+            out.append(value.toChar())
+            i += length
+            continue
+        }
+        out.append(text[i])
+        i++
     }
     return out.toString()
 }
