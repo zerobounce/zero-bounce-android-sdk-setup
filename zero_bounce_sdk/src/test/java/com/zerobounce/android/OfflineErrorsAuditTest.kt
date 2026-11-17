@@ -93,6 +93,63 @@ class OfflineErrorsAuditTest {
     }
 
     @Test
+    fun aMessageBesideOnlyNullFieldsIsAnErrorOnEveryTypedCall() {
+        val methods = RequestSweep.requestMethods(ZeroBounceClient::class.java).filter { !exempt(it.name) }
+        val failures = mutableListOf<String>()
+        val body = """{"message":"Invalid domain","domain":null}"""
+        for (method in methods) {
+            val outcome = RequestSweep(context, dir, csv).invoke(client(body), method)
+            if (outcome.thrown != null || outcome.timedOut || outcome.successes.isNotEmpty() ||
+                outcome.errors.size != 1 || outcome.errors[0]?.statusCode != 200
+            ) {
+                failures.add(outcome.toString())
+            }
+        }
+        assertTrue("${failures.size} failures:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun aNullFieldWithNoMessageStaysAResult() {
+        val method = RequestSweep.requestMethods(ZeroBounceClient::class.java).first { it.name == "findEmail" }
+        val outcome = RequestSweep(context, dir, csv).invoke(client("""{"domain":null}"""), method)
+        assertTrue(outcome.toString(), outcome.errors.isEmpty() && outcome.successes.size == 1)
+    }
+
+    @Test
+    fun fileStatusNeedsAKnownField() {
+        val methods = RequestSweep.requestMethods(ZeroBounceClient::class.java)
+            .filter { it.name == "fileStatus" || it.name == "scoringFileStatus" }
+        assertEquals(2, methods.size)
+        for (body in listOf("""{"foo":1}""", """{"message":"m","file_id":null}""", """{"":""}""")) {
+            for (method in methods) {
+                val outcome = RequestSweep(context, dir, csv).invoke(client(body), method)
+                assertTrue("$body ${method.name} $outcome", outcome.successes.isEmpty() && outcome.errors.size == 1)
+            }
+        }
+        for (method in methods) {
+            val outcome = RequestSweep(context, dir, csv).invoke(
+                client("""{"file_status":"Processing"}"""),
+                method,
+            )
+            assertTrue(outcome.toString(), outcome.errors.isEmpty() && outcome.successes.size == 1)
+        }
+    }
+
+    @Test
+    fun aNonFlagSuccessDoesNotHideAnError() {
+        val method = RequestSweep.requestMethods(ZeroBounceClient::class.java).first { it.name == "getCredits" }
+        for (body in listOf(
+            """{"error":"Invalid API key","success":null}""",
+            """{"message":"no credits","success":0.4}""",
+            """{"success":0}""",
+            """{"success":"false"}""",
+        )) {
+            val outcome = RequestSweep(context, dir, csv).invoke(client(body), method)
+            assertTrue("$body $outcome", outcome.successes.isEmpty() && outcome.errors.size == 1 && outcome.errors[0]?.statusCode == 200)
+        }
+    }
+
+    @Test
     fun validateGreylistMessageStaysAResultAndFiltersKeepTheirMessage() {
         val sweep = RequestSweep(context, dir, csv)
         val validate = RequestSweep.requestMethods(ZeroBounceClient::class.java).filter { it.name == "validate" }

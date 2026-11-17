@@ -482,12 +482,43 @@ private val MESSAGE_KEYS = setOf("error", "message", "error_message", "Message",
 @JvmSynthetic
 internal fun messageOnlyError(statusCode: Int, body: String): ErrorResponse? {
     val parsed = objectWithoutSuccess(body) ?: return null
-    if (!parsed.keySet().all { it in MESSAGE_KEYS }) return null
-    val text = parsed.keySet().firstNotNullOfOrNull { messageText(parsed.get(it)) }
+    val keys = parsed.keySet()
+    val onlyMessages = keys.all { it in MESSAGE_KEYS }
+    // A message beside documented fields that are all null is the same error.
+    // {"domain":null} with no message text stays a result.
+    val besideNulls = keys.any { it in MESSAGE_KEYS && messageText(parsed.get(it)) != null } &&
+        keys.any { it !in MESSAGE_KEYS } &&
+        keys.filter { it !in MESSAGE_KEYS }.all { parsed.get(it)?.isJsonNull == true }
+    if (!onlyMessages && !besideNulls) return null
+    val text = keys.firstNotNullOfOrNull { messageText(parsed.get(it)) }
     return ErrorResponse(
         errors = arrayListOf(text ?: "ZeroBounce returned an error with no message text."),
         statusCode = statusCode,
     )
+}
+
+/** Known file-status fields. One of them must be non-null; `{"foo":1}` is not a status. */
+private val FILE_STATUS_FIELDS = setOf(
+    "file_id", "file_name", "upload_date", "file_status", "file_phase_2_status",
+    "complete_percentage", "error_reason", "return_url", "success",
+)
+
+/** Whether a file-status body has one non-null known field. `{"file_status":"Processing"}` does. */
+@JvmSynthetic
+internal fun fileStatusHasResult(body: String): Boolean {
+    val parsed = try {
+        JsonParser.parseString(body)
+    } catch (_: Throwable) {
+        return false
+    }
+    if (!parsed.isJsonObject) return false
+    val obj = parsed.asJsonObject
+    return FILE_STATUS_FIELDS.any { key ->
+        val value = obj.get(key) ?: return@any false
+        if (value.isJsonNull) return@any false
+        if (value.isJsonPrimitive && value.asJsonPrimitive.isString && value.asString.isBlank()) return@any false
+        true
+    }
 }
 
 /** A message's text: a string, or the non-blank strings of a list joined with newlines; null when there is none. */
@@ -509,9 +540,37 @@ private fun objectWithoutSuccess(body: String): com.google.gson.JsonObject? {
     return try {
         val parsed = JsonParser.parseString(body)
         if (!parsed.isJsonObject) return null
-        parsed.asJsonObject.takeIf { !it.has("success") }
+        val obj = parsed.asJsonObject
+        if (obj.has("success")) {
+            // A real flag decides on its own. A non-flag is not a result field,
+            // so the message and dead-key rules still see the rest of the body.
+            if (successFlag(obj.get("success")) != null) return null
+            obj.remove("success")
+        }
+        obj
     } catch (_: Throwable) {
         null
+    }
+}
+
+/** A real success flag: boolean, 0 or 1 (including 1.0), or true/false/0/1. Anything else is not a flag. */
+@JvmSynthetic
+internal fun successFlag(value: com.google.gson.JsonElement?): Boolean? {
+    if (value == null || value.isJsonNull || !value.isJsonPrimitive) return null
+    val primitive = value.asJsonPrimitive
+    return when {
+        primitive.isBoolean -> primitive.asBoolean
+        primitive.isNumber -> when (primitive.asDouble) {
+            0.0 -> false
+            1.0 -> true
+            else -> null
+        }
+        primitive.isString -> when (primitive.asString.trim().lowercase(java.util.Locale.ROOT)) {
+            "false", "0" -> false
+            "true", "1" -> true
+            else -> null
+        }
+        else -> null
     }
 }
 
@@ -530,14 +589,7 @@ internal fun successMeansFailure(body: String): Boolean {
     if (!body.trimStart().startsWith("{")) return false
     return try {
         val parsed = com.google.gson.JsonParser.parseString(body).asJsonObject
-        val value = parsed.get("success") ?: return false
-        if (!value.isJsonPrimitive) return false
-        val primitive = value.asJsonPrimitive
-        when {
-            primitive.isBoolean -> !primitive.asBoolean
-            primitive.isString -> primitive.asString.trim().equals("false", ignoreCase = true)
-            else -> false
-        }
+        successFlag(parsed.get("success")) == false
     } catch (_: Throwable) {
         false
     }

@@ -2061,7 +2061,12 @@ object ZeroBounceSDK {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
 
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { it.toObject<T>() }, messageOnlyIsFailure = messageOnlyIsFailure) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { body ->
+                    if (T::class.java == ZBFileStatusResponse::class.java && !fileStatusHasResult(body)) {
+                        throw WrongShapeException()
+                    }
+                    body.toObject<T>()
+                }, messageOnlyIsFailure = messageOnlyIsFailure) {
                     responseCallback(it, response.code)
                 }
             }

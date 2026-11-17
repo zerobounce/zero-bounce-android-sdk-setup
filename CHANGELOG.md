@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A base URL with userinfo (`https://api.zerobounce.net@other-host/...`) is refused, so the API key is not sent to that host.
 - A downloaded file whose body is an HTML page after leading spaces is an error, and the saved name includes the file id so two downloads that share a `filename=` do not overwrite each other.
 - A secret echoed with a case fold (`STRASSE` for `straße`) or as `\u{27}`, `\U00000027` or octal `\047` is removed from the error text.
+- A message beside fields that are all null is an error on a typed call, a file status needs one known field, and a `success` value that is not a real flag does not hide that error. `0` and `"0"` count as a failed flag.
 
 ## [3.1.1] - 2026-11-15
 
