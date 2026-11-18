@@ -31,13 +31,20 @@ internal object StrictBooleanAdapter : TypeAdapter<Boolean?>() {
             JsonToken.BOOLEAN -> reader.nextBoolean()
             JsonToken.STRING, JsonToken.NUMBER -> {
                 val text = reader.nextString()
-                fromText(text) ?: throw invalid(path, if (token == JsonToken.STRING) "\"$text\"" else text)
+                (if (token == JsonToken.NUMBER) fromNumber(text) else fromText(text)) ?: throw invalid(path, if (token == JsonToken.STRING) "\"$text\"" else text)
             }
             else -> {
                 reader.skipValue()
                 throw invalid(path, if (token == JsonToken.BEGIN_ARRAY) "an array" else "an object")
             }
         }
+    }
+
+    /** A number token: 1 or 0 in any spelling (`1.0`, `1e0`), as `successFlag` reads it. */
+    private fun fromNumber(text: String): Boolean? = when (text.toDoubleOrNull()) {
+        1.0 -> true
+        0.0 -> false
+        else -> null
     }
 
     private fun fromText(text: String): Boolean? = when {

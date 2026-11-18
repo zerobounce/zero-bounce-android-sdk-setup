@@ -5,14 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.2] - 2026-11-18
+
+### Changed
+
+- **Behaviour change:** `getFile` and `scoringGetFile` save the download as `<fileId>_<name>` (the name from the server's `Content-Disposition`), or `<fileId>.csv` when there is none. Up to 3.1.1 the file was saved as `<name>`, so two downloads with the same `filename=` overwrote each other. Read the path from `ZBGetFileResponse.localFilePath` rather than building it.
 
 ### Fixed
 
 - A base URL with userinfo (`https://api.zerobounce.net@other-host/...`) is refused, so the API key is not sent to that host.
-- A downloaded file whose body is an HTML page after leading spaces is an error, and the saved name includes the file id so two downloads that share a `filename=` do not overwrite each other.
+- A downloaded file whose body is an HTML page is an error even when the page starts with spaces, a byte-order mark, comments or an XML prolog.
 - A secret echoed with a case fold (`STRASSE` for `straße`) or as `\u{27}`, `\U00000027` or octal `\047` is removed from the error text.
-- A message beside fields that are all null is an error on a typed call, a file status needs one known field, and a `success` value that is not a real flag does not hide that error. `0` and `"0"` count as a failed flag.
+- A message beside fields that are all null is an error on a typed call, and a `success` value that is not a real flag (`null`, `0.4`, `"maybe"`) no longer hides an error such as `{"error":"Invalid API key","success":null}`: up to 3.1.1 such a body reached the success callback on calls whose result has no required field. `0` and `"0"` count as a failed flag, and `1.0` as a true one.
+- A file status needs one known non-null field on every file-status call (`fileStatus`, `scoringFileStatus`, `emailFinderFileStatus`, `domainSearchFileStatus`): `{"foo":1}` is an error, `{"file_status":"Processing"}` is a result.
 
 ## [3.1.1] - 2026-11-15
 
@@ -362,6 +367,7 @@ The details are under Changed and Fixed below.
 
 - First tagged release: validation, credits, usage, bulk file, and AI scoring.
 
+[3.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.0.0...v3.0.1

@@ -2198,7 +2198,13 @@ object ZeroBounceSDK {
             override fun onResponse(call: Call, response: Response) {
                 val onError = redacting(call) { errorCallback(it) }
                 val json = readBody(call, response) { onError(it) } ?: return
-                acceptJson(response.code, response.header("Content-Type"), json, onError, { (gson.fromJson(it, responseClass) ?: throw WrongShapeException()).also { _ -> StrictTypes.requireFields(responseClass, it) } }) {
+                acceptJson(response.code, response.header("Content-Type"), json, onError, { body ->
+                    // The same rule as fileStatus: a file status needs one known field.
+                    if (responseClass == ZBFileStatusResponse::class.java && !fileStatusHasResult(body)) {
+                        throw WrongShapeException()
+                    }
+                    (gson.fromJson(body, responseClass) ?: throw WrongShapeException()).also { _ -> StrictTypes.requireFields(responseClass, body) }
+                }) {
                     responseCallback(it)
                 }
             }

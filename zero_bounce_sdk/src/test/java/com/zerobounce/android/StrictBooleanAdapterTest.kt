@@ -25,6 +25,22 @@ class StrictBooleanAdapterTest {
         return false
     }
 
+    private fun read(json: String): Boolean? = StrictBooleanAdapter.read(JsonReader(StringReader(json)))
+
+    /** A number token is read as successFlag reads it: 1 and 0 in any spelling (lesson 130). */
+    @Test
+    fun numbersOneAndZeroInAnySpellingAreFlags() {
+        for (json in listOf("1", "1.0", "1e0", "1.00", "true", "\"1\"", "\" TRUE \"")) assertTrue(json, read(json) == true)
+        for (json in listOf("0", "0.0", "0e5", "false", "\"0\"")) assertTrue(json, read(json) == false)
+        for (json in listOf("2", "0.4", "-1", "\"1.0\"", "\"yes\"")) {
+            try {
+                read(json)
+                fail("read a boolean from $json")
+            } catch (_: StrictBooleanException) {
+            }
+        }
+    }
+
     /**
      * A long value that is not a boolean is quoted shortened, and the cut never
      * falls inside a character: here an emoji (a surrogate pair) straddles the

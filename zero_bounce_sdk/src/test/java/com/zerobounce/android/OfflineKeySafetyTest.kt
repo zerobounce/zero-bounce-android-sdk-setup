@@ -130,6 +130,31 @@ class OfflineKeySafetyTest {
     }
 
     @Test
+    fun escapesPastTheLastCodePointAreLeftAsWritten() {
+        // 8 hex digits can exceed Int.MAX_VALUE: these threw NumberFormatException on the OkHttp thread.
+        val secret = "ab'cd"
+        for (text in listOf("bad \\UFFFFFFFFx", "bad \\u{FFFFFFFF}", "bad \\U80000000", "bad \\u{110000}", "bad \\UFFFFFFFF")) {
+            assertFalse(text, exposesSecret(text, listOf(secret)))
+            assertEquals(text, text, redactSecrets(text, listOf(secret)))
+        }
+        assertTrue(exposesSecret("\\UFFFFFFFF ab\\u{27}cd", listOf(secret)))
+        // An 8-digit \U past U+10FFFF is not read as a 4-digit escape either: no U+FFFF appears.
+        assertFalse(exposesSecret("\\UFFFFFFFF", listOf("\uFFFF")))
+    }
+
+    @Test
+    fun htmlAfterACommentPrologOrBomIsHtml() {
+        assertTrue(looksLikeHtml("<!-- generated --><html><body>x</body></html>"))
+        assertTrue(looksLikeHtml("<?xml version=\"1.0\"?>\n<!DOCTYPE html><html>"))
+        assertTrue(looksLikeHtml("\uFEFF<html>"))
+        assertTrue(looksLikeHtml("  <!-- a -->  <!-- b -->\n<body>"))
+        assertTrue(looksLikeHtml("<!-- never closed"))
+        assertFalse(looksLikeHtml("{\"error\":\"<html>\"}"))
+        assertFalse(looksLikeHtml("<!-- a -->{\"a\":1}"))
+        assertFalse(looksLikeHtml("email,status\n<html>@x.com,invalid"))
+    }
+
+    @Test
     fun htmlAfterPaddingIsHtmlAndJsonIsNot() {
         assertTrue(looksLikeHtml(" ".repeat(2500) + "<html><body>x</body></html>"))
         assertTrue(looksLikeHtml(" ".repeat(9000) + "<html>"))

@@ -118,8 +118,8 @@ class OfflineErrorsAuditTest {
     @Test
     fun fileStatusNeedsAKnownField() {
         val methods = RequestSweep.requestMethods(ZeroBounceClient::class.java)
-            .filter { it.name == "fileStatus" || it.name == "scoringFileStatus" }
-        assertEquals(2, methods.size)
+            .filter { it.name in setOf("fileStatus", "scoringFileStatus", "emailFinderFileStatus", "domainSearchFileStatus") }
+        assertEquals(4, methods.size)
         for (body in listOf("""{"foo":1}""", """{"message":"m","file_id":null}""", """{"":""}""")) {
             for (method in methods) {
                 val outcome = RequestSweep(context, dir, csv).invoke(client(body), method)
@@ -133,6 +133,22 @@ class OfflineErrorsAuditTest {
             )
             assertTrue(outcome.toString(), outcome.errors.isEmpty() && outcome.successes.size == 1)
         }
+    }
+
+    @Test
+    fun anEscapePastTheLastCodePointIsAnErrorNotACrash() {
+        val method = RequestSweep.requestMethods(ZeroBounceClient::class.java).first { it.name == "getCredits" }
+        for (body in listOf("""{"error":"bad \\UFFFFFFFF x"}""", """{"error":"bad \\u{FFFFFFFF}"}""", "bad \\UFFFFFFFF x")) {
+            val outcome = RequestSweep(context, dir, csv).invoke(client(body), method)
+            assertTrue("$body $outcome", outcome.thrown == null && !outcome.timedOut && outcome.successes.isEmpty() && outcome.errors.size == 1)
+        }
+    }
+
+    @Test
+    fun aOneFlagWrittenAsADecimalIsAResult() {
+        val method = RequestSweep.requestMethods(ZeroBounceClient::class.java).first { it.name == "fileStatus" }
+        val outcome = RequestSweep(context, dir, csv).invoke(client("""{"success":1.0,"file_id":"fid","file_status":"Complete"}"""), method)
+        assertTrue(outcome.toString(), outcome.errors.isEmpty() && outcome.successes.size == 1)
     }
 
     @Test

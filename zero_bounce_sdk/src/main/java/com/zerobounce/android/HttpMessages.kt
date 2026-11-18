@@ -17,7 +17,16 @@ import java.util.Locale
 @JvmSynthetic
 internal fun looksLikeHtml(body: String): Boolean {
     var start = 0
-    while (start < body.length && body[start].isWhitespace()) start++
+    while (true) {
+        while (start < body.length && (body[start].isWhitespace() || body[start] == '\uFEFF')) start++
+        // A page may open with comments or an XML prolog (any <?...?>) before its tag. An unterminated one is not JSON either: count it as a page.
+        val end = when {
+            body.startsWith("<!--", start) -> body.indexOf("-->", start + 4).let { if (it < 0) return true else it + 3 }
+            body.startsWith("<?", start) -> body.indexOf("?>", start + 2).let { if (it < 0) return true else it + 2 }
+            else -> break
+        }
+        start = end
+    }
     if (start >= body.length) return false
     if (body[start] == '{' || body[start] == '[') return false
     val rest = body.substring(start).lowercase(Locale.ROOT)
@@ -106,12 +115,12 @@ private fun folded(text: String): String {
  */
 @JvmSynthetic
 internal fun exposesSecret(text: String, secrets: Iterable<String?>): Boolean {
-    val wanted = secrets.filterNotNull().filter { it.isNotEmpty() }
+    val wanted = secrets.filterNotNull().filter { it.isNotEmpty() }.map { folded(it) }
     if (wanted.isEmpty()) return false
     val seen = hashSetOf(text)
     var layer = listOf(text)
     for (depth in 0..4) {
-        if (layer.any { view -> wanted.any { folded(view).contains(folded(it)) } }) return true
+        if (layer.any { view -> folded(view).let { f -> wanted.any { f.contains(it) } } }) return true
         if (depth == 4) break
         layer = layer.flatMap { listOf(percentDecoded(it, false), percentDecoded(it, true), jsonUnescaped(it)) }
             .filter { seen.add(it) }
@@ -170,19 +179,24 @@ private fun jsonUnescaped(text: String): String {
                 digits += text[j]
                 j++
             }
-            if (digits.isNotEmpty() && j < text.length && text[j] == '}') {
-                out.appendCodePoint(digits.toInt(16).coerceIn(0, 0x10FFFF))
+            // toLong: 8 hex digits can exceed Int.MAX_VALUE. A value past U+10FFFF is left as written.
+            if (digits.isNotEmpty() && j < text.length && text[j] == '}' && digits.toLong(16) <= 0x10FFFF) {
+                out.appendCodePoint(digits.toLong(16).toInt())
                 i = j + 1
                 continue
             }
         }
         if (escape == 'U' && i + 9 < text.length && (2..9).all { hexValue(text[i + it].code) >= 0 }) {
-            val code = text.substring(i + 2, i + 10).toInt(16)
+            val code = text.substring(i + 2, i + 10).toLong(16)
             if (code <= 0x10FFFF) {
-                out.appendCodePoint(code)
+                out.appendCodePoint(code.toInt())
                 i += 10
                 continue
             }
+            // Past U+10FFFF: left as written, not read as a 4-digit \U escape.
+            out.append(text[i])
+            i++
+            continue
         }
         if ((escape == 'u' || escape == 'U') && i + 5 < text.length && (2..5).all { hexValue(text[i + it].code) >= 0 }) {
             out.append(text.substring(i + 2, i + 6).toInt(16).toChar())

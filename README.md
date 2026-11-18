@@ -228,6 +228,8 @@ Then you can use any of the SDK methods, for example:
 
     Pass `downloadType` / `activityData` as **named** arguments after the two callbacks (avoids ambiguity with Kotlin overloads).
 
+    The file is saved in the app's external files directory as `<fileId>_<name>` (or `<fileId>.csv`); use `rsp.localFilePath` instead of building the path yourself.
+
 * ##### Check the status of a file uploaded via *sendFile* method
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
@@ -335,6 +337,8 @@ Then you can use any of the SDK methods, for example:
         }
     )
     ```
+
+    The file is saved as `<fileId>_<name>` (or `<fileId>.csv`), as with *getFile*; use `rsp.localFilePath`.
 
 * ##### Check the status of a file uploaded via *scoringSendFile* method
     ```kotlin

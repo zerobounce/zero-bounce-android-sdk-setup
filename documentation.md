@@ -207,6 +207,8 @@ Then you can use any of the SDK methods, for example:
     ```
     Matches [v2 getfile](https://www.zerobounce.net/docs/email-validation-api-quickstart/v2-get-file): `phase_2` and `combined` only when `file_phase_2_status = Complete`. Optional `activity_data` appends activity columns when `true` ([activity data](https://www.zerobounce.net/docs/activity-data)). The API may return JSON errors with HTTP 200; the SDK surfaces those via `errorCallback`.
 
+    The file is saved in the app's external files directory as `<fileId>_<name>` (or `<fileId>.csv`); use `rsp.localFilePath` instead of building the path yourself.
+
 * ####### Check the status of a file uploaded via *sendFile* method
     ```kotlin
     val fileId = "<FILE_ID>"    // The returned file ID when calling sendfile API
@@ -315,6 +317,8 @@ Then you can use any of the SDK methods, for example:
         }
     )
     ```
+
+    The file is saved as `<fileId>_<name>` (or `<fileId>.csv`), as with *getFile*; use `rsp.localFilePath`.
 
 * ####### Check the status of a file uploaded via *scoringSendFile* method
     ```kotlin
