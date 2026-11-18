@@ -648,7 +648,7 @@ The documentation of the SDK can be generated through a *Gradle* task. Open the 
 
 ## Publication
 
-Publishing to Maven Central is done by the GitHub Actions **Publish** workflow ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)), run **manually per tag**. It does not run on its own when a release is created, and it does not change the version.
+Publishing to Maven Central is done by the GitHub Actions **Publish** workflow ([`.github/workflows/publish.yml`](https://github.com/zerobounce/zero-bounce-android-sdk-setup/blob/master/.github/workflows/publish.yml)), run **manually per tag**. It does not run on its own when a release is created, and it does not change the version.
 
 1. **Version the project** and create a **git tag** (e.g. `vX.Y.Z`), then push the tag.
 2. In the repo go to **Actions → Publish**, click **Run workflow**, enter the tag (e.g. `vX.Y.Z`), and run.
@@ -678,7 +678,7 @@ Then build the signed bundle:
 ./gradlew centralBundle
 ```
 
-This writes `build/central-bundle.zip`. Gradle uploads nothing; the upload is the workflow's *Publish to Maven Central* step, a single `POST` of that zip to the Central Portal API (see [`.github/workflows/publish.yml`](.github/workflows/publish.yml)). The old OSSRH / Nexus staging flow (`s01.oss.sonatype.org`, `publishReleasePublicationToSonatypeRepository`, `closeAndReleaseSonatypeStagingRepository`, `sonatypeStagingProfileId`) is no longer used by this project; `scripts/publish-root.gradle` explains why.
+This writes `build/central-bundle.zip`. Gradle uploads nothing; the upload is the workflow's *Publish to Maven Central* step, a single `POST` of that zip to the Central Portal API (see [`.github/workflows/publish.yml`](https://github.com/zerobounce/zero-bounce-android-sdk-setup/blob/master/.github/workflows/publish.yml)). The old OSSRH / Nexus staging flow (`s01.oss.sonatype.org`, `publishReleasePublicationToSonatypeRepository`, `closeAndReleaseSonatypeStagingRepository`, `sonatypeStagingProfileId`) is no longer used by this project; `scripts/publish-root.gradle` explains why.
 
 After a release, it will take:
 - a while before you can see it on the [Maven Repository](https://repo1.maven.org/maven2/com/zerobounce/android/zerobouncesdk/) and on the [Sonatype Search](https://central.sonatype.com/artifact/com.zerobounce.android/zerobouncesdk)
@@ -821,4 +821,4 @@ Registry: [com.zerobounce.android:zerobouncesdk on Maven Central](https://centra
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/zerobounce/zero-bounce-android-sdk-setup/blob/master/LICENSE).
