@@ -32,6 +32,10 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The ZeroBounce main class. All the requests are implemented here.
+ *
+ * It does not implement [ZeroBounceApi]. To mock the SDK in tests, take a [ZeroBounceApi] where
+ * your code makes the calls and pass a [ZeroBounceClient] in production: it offers the same
+ * request methods for one API key.
  */
 object ZeroBounceSDK {
 

@@ -29,8 +29,11 @@ import java.util.concurrent.TimeUnit
  * that is not a JSON object - `/seeds` is an array, `/seed-count` a bare
  * number - arrives as that [JsonElement]. Failures carry the HTTP status on
  * [ErrorResponse.statusCode].
+ *
+ * Every request method comes from [ZeroBounceWarmupApi]. Code that should be testable without
+ * the network can depend on that interface and receive a mock in tests.
  */
-class ZeroBounceWarmup {
+class ZeroBounceWarmup : ZeroBounceWarmupApi {
 
     companion object {
         const val DEFAULT_BASE_URL = "https://warmup-api.zerobounce.net"
@@ -117,7 +120,7 @@ class ZeroBounceWarmup {
     // -- sending accounts ----------------------------------------------------
 
     /** Every sending account of the key's team. GET /sending-accounts */
-    fun listSendingAccounts(
+    override fun listSendingAccounts(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -126,7 +129,7 @@ class ZeroBounceWarmup {
     }
 
     /** One sending account. GET /sending-account */
-    fun getSendingAccount(
+    override fun getSendingAccount(
         fromAddress: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -151,11 +154,10 @@ class ZeroBounceWarmup {
      * `warmup_start_date`), as documented at
      * https://www.zerobounce.net/docs/warmup-api/adding-a-sending-account.
      */
-    @JvmOverloads
-    fun addSendingAccount(
+    override fun addSendingAccount(
         fromAddress: String,
         onboardingModel: String,
-        options: ZBWarmupAddSendingAccountOptions = ZBWarmupAddSendingAccountOptions(),
+        options: ZBWarmupAddSendingAccountOptions,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -245,7 +247,7 @@ class ZeroBounceWarmup {
      * Changes an account's engagement rule, status and auto-enable flag.
      * PUT /sending-accounts. [statusId] is 0 to 8 (4 Paused, 5 Disabled).
      */
-    fun updateSendingAccount(
+    override fun updateSendingAccount(
         fromAddress: String,
         engagementRuleId: Int,
         statusId: Int,
@@ -271,7 +273,7 @@ class ZeroBounceWarmup {
     }
 
     /** Removes a sending account. DELETE /sending-accounts. Destructive and final. */
-    fun deleteSendingAccount(
+    override fun deleteSendingAccount(
         fromAddress: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -285,7 +287,7 @@ class ZeroBounceWarmup {
      * Moves an account and its history to a new from-address.
      * PUT /smtp-credentials - despite the path, no SMTP credentials are stored.
      */
-    fun changeFromAddress(
+    override fun changeFromAddress(
         oldFromAddress: String,
         newFromAddress: String,
         responseCallback: (response: JsonElement?) -> Unit,
@@ -314,11 +316,10 @@ class ZeroBounceWarmup {
      * [searchFrom] takes letters, digits and `. - _ @ +` only. [offset] and
      * [limit] go on the wire as strings.
      */
-    @JvmOverloads
-    fun listFromAddresses(
-        searchFrom: String? = null,
-        offset: Int? = null,
-        limit: Int? = null,
+    override fun listFromAddresses(
+        searchFrom: String?,
+        offset: Int?,
+        limit: Int?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -353,7 +354,7 @@ class ZeroBounceWarmup {
     // -- engagement rules ----------------------------------------------------
 
     /** -1 Custom, 0 Default, 1 Slow Pace, 2 Repair, 3 Boost, 4 Protect. */
-    fun getEngagementRules(
+    override fun getEngagementRules(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -362,7 +363,7 @@ class ZeroBounceWarmup {
     }
 
     /** Sets a standard rule (0 to 4) on an address. PUT /engagement-rule */
-    fun setEngagementRule(
+    override fun setEngagementRule(
         cFrom: String,
         ruleId: Int,
         responseCallback: (response: JsonElement?) -> Unit,
@@ -375,7 +376,7 @@ class ZeroBounceWarmup {
     }
 
     /** An address's custom rule, with can_update and remaining_seconds. */
-    fun getCustomEngagement(
+    override fun getCustomEngagement(
         cFrom: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -391,7 +392,7 @@ class ZeroBounceWarmup {
     }
 
     /** Creates a custom rule. Starts a 7 day cooldown on updates. */
-    fun createCustomEngagement(
+    override fun createCustomEngagement(
         cFrom: String,
         replyPct: Int,
         importantPct: Int,
@@ -405,7 +406,7 @@ class ZeroBounceWarmup {
     }
 
     /** Updates a custom rule. During the 7 day cooldown the API answers 429. */
-    fun updateCustomEngagement(
+    override fun updateCustomEngagement(
         cFrom: String,
         replyPct: Int,
         importantPct: Int,
@@ -419,7 +420,7 @@ class ZeroBounceWarmup {
     }
 
     /** Deletes a custom rule and falls back to standard rule 1-4. */
-    fun deleteCustomEngagement(
+    override fun deleteCustomEngagement(
         cFrom: String,
         engagementRuleId: Int,
         responseCallback: (response: JsonElement?) -> Unit,
@@ -437,7 +438,7 @@ class ZeroBounceWarmup {
     // -- statistics, seeds and utilities -------------------------------------
 
     /** The seed list. GET /seeds */
-    fun getSeeds(
+    override fun getSeeds(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -446,7 +447,7 @@ class ZeroBounceWarmup {
     }
 
     /** The seed list as CSV (columns seed,provider). GET /seeds/download */
-    fun downloadSeeds(
+    override fun downloadSeeds(
         responseCallback: (csv: String) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -455,7 +456,7 @@ class ZeroBounceWarmup {
     }
 
     /** Number of seeds. GET /seed-count */
-    fun getSeedCount(
+    override fun getSeedCount(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -464,7 +465,7 @@ class ZeroBounceWarmup {
     }
 
     /** Today's warmup progress. GET /progress-today */
-    fun getProgressToday(
+    override fun getProgressToday(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -473,7 +474,7 @@ class ZeroBounceWarmup {
     }
 
     /** Messages sent today. GET /sent-today */
-    fun getSentToday(
+    override fun getSentToday(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -482,7 +483,7 @@ class ZeroBounceWarmup {
     }
 
     /** Current daily volume. GET /emails-per-day */
-    fun getEmailsPerDay(
+    override fun getEmailsPerDay(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -491,7 +492,7 @@ class ZeroBounceWarmup {
     }
 
     /** Statistics for an address. An address with no history returns zeros. */
-    fun getStatistics(
+    override fun getStatistics(
         fromAddress: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -502,7 +503,7 @@ class ZeroBounceWarmup {
     }
 
     /** Daily statistics between two dates, inclusive. GET /statistics-per-day */
-    fun getStatisticsPerDay(
+    override fun getStatisticsPerDay(
         fromAddress: String,
         startDate: String,
         endDate: String,
@@ -534,7 +535,7 @@ class ZeroBounceWarmup {
     }
 
     /** Detailed statistics for an address. GET /statistics-detailed */
-    fun getStatisticsDetailed(
+    override fun getStatisticsDetailed(
         cFrom: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -545,7 +546,7 @@ class ZeroBounceWarmup {
     }
 
     /** An address's statistics as CSV. GET /statistics/download */
-    fun downloadStatistics(
+    override fun downloadStatistics(
         cFrom: String,
         responseCallback: (csv: String) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -555,7 +556,7 @@ class ZeroBounceWarmup {
     }
 
     /** Statistics for one from-address. GET /from-address-statistics */
-    fun getFromAddressStatistics(
+    override fun getFromAddressStatistics(
         fromAddress: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
@@ -573,10 +574,9 @@ class ZeroBounceWarmup {
      * valid email address" for a bare domain, although the docs describe a
      * domain.
      */
-    @JvmOverloads
-    fun checkDomainDmarc(
+    override fun checkDomainDmarc(
         fromAddress: String,
-        dkimSelector: String? = null,
+        dkimSelector: String?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) {
@@ -607,7 +607,7 @@ class ZeroBounceWarmup {
      * LIVE: the API answers any failed SMTP login with HTTP 500. That is an
      * API bug. The username and password are masked in every error from here.
      */
-    fun testSmtpConfiguration(
+    override fun testSmtpConfiguration(
         fromAddress: String,
         username: String,
         password: String,
@@ -637,6 +637,51 @@ class ZeroBounceWarmup {
             responseCallback, errorCallback, listOf(password, username),
         )
     }
+
+    // -- Java overloads ------------------------------------------------------
+
+    // Up to 3.1.2 these three methods were @JvmOverloads. An override cannot declare default
+    // values, so @JvmOverloads generates nothing on it; these keep the shorter Java signatures.
+    // They are not on ZeroBounceWarmupApi: there, Kotlin would pick them over the full method
+    // and a mock stubbed on the full method would not see the call.
+
+    /** [addSendingAccount] with default [ZBWarmupAddSendingAccountOptions]. */
+    fun addSendingAccount(
+        fromAddress: String,
+        onboardingModel: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = addSendingAccount(
+        fromAddress, onboardingModel, ZBWarmupAddSendingAccountOptions(), responseCallback, errorCallback,
+    )
+
+    /** [listFromAddresses] without a search, offset or limit. */
+    fun listFromAddresses(
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = listFromAddresses(null, null, null, responseCallback, errorCallback)
+
+    /** [listFromAddresses] without an offset or limit. */
+    fun listFromAddresses(
+        searchFrom: String?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = listFromAddresses(searchFrom, null, null, responseCallback, errorCallback)
+
+    /** [listFromAddresses] without a limit. */
+    fun listFromAddresses(
+        searchFrom: String?,
+        offset: Int?,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = listFromAddresses(searchFrom, offset, null, responseCallback, errorCallback)
+
+    /** [checkDomainDmarc] without a DKIM selector. */
+    fun checkDomainDmarc(
+        fromAddress: String,
+        responseCallback: (response: JsonElement?) -> Unit,
+        errorCallback: (errorResponse: ErrorResponse?) -> Unit,
+    ) = checkDomainDmarc(fromAddress, null, responseCallback, errorCallback)
 
     // -- internals -----------------------------------------------------------
 

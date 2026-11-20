@@ -608,6 +608,32 @@ warmup.checkDomainDmarc("sender@example.com", null, ok, error)
 
 Every documented empty success (204, or an empty 200) arrives as a `null` payload, and a payload that is not a JSON object — `/seeds` is an array, `/seed-count` a bare number — arrives as that `JsonElement`. Failures carry the HTTP status on `ErrorResponse.statusCode`. Nothing is stored by `testSmtpConfiguration`, and the credentials you pass it are masked out of any error it raises.
 
+## Testing code that uses the SDK
+
+`ZeroBounceClient` and `ZeroBounceWarmup` are final classes, so mocking them needs mockk or Mockito's inline mock maker. Each one implements an interface with every request method instead: `ZeroBounceApi` and `ZeroBounceWarmupApi`. Make your code take the interface, pass the real client in production, and a mock in tests. Any mocking library works, including Mockito's proxy mock maker or a plain `java.lang.reflect.Proxy`.
+
+```kotlin
+class CreditsGate(private val zb: ZeroBounceApi) {
+    fun hasCredits(answer: (Boolean) -> Unit) = zb.getCredits(
+        responseCallback = { answer((it?.credits?.toIntOrNull() ?: 0) > 0) },
+        errorCallback = { answer(false) },
+    )
+}
+
+// production
+val client = ZeroBounceClient().apply { initialize(apiKey) }
+val gate = CreditsGate(client)
+
+// test
+val zb = mock<ZeroBounceApi>()
+doAnswer { it.getArgument<(ZBCreditsResponse?) -> Unit>(0)(ZBCreditsResponse("42")) }
+    .whenever(zb).getCredits(any(), any())
+```
+
+`ZeroBounceSDK` is a shared `object` and does not implement `ZeroBounceApi`. If your code calls `ZeroBounceSDK` directly, switch it to a `ZeroBounceApi` parameter and pass a `ZeroBounceClient`: it has the same request methods.
+
+The interfaces leave out construction and configuration (`initialize`, `setListEvaluatorBaseUrl`, `setInboxPlacementBaseUrl`). New API methods are added to them in minor releases, so mock them rather than implementing them in your own classes: a class of yours that implements one may stop compiling after an update.
+
 ## Live API suite
 
 `gradle test` never touches the network: the live suite is excluded from the default test task unless you pass `-PzbLive`, so CI never runs it. It needs real keys, which come from the environment and are never written anywhere:
