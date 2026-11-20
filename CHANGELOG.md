@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-20
+
 ### Added
 
 - `ZeroBounceApi` and `ZeroBounceWarmupApi`: interfaces with every request method of `ZeroBounceClient` and `ZeroBounceWarmup`, which implement them and stay final. Take the interface in your own code and mock it in tests without mockk or Mockito's inline mock maker; see "Testing code that uses the SDK" in the README. They leave out `initialize` and the base URL setters. New API methods are added to them in minor releases, so they are meant to be mocked, not implemented in your own classes.
@@ -377,7 +379,8 @@ The details are under Changed and Fixed below.
 
 - First tagged release: validation, credits, usage, bulk file, and AI scoring.
 
-[Unreleased]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.2...HEAD
+[Unreleased]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.2...v3.2.0
 [3.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.0.1...v3.1.0
