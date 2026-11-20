@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `ZeroBounceApi` and `ZeroBounceWarmupApi`: interfaces with every request method of `ZeroBounceClient` and `ZeroBounceWarmup`, which implement them and stay final. Take the interface in your own code and mock it in tests without mockk or Mockito's inline mock maker; see "Testing code that uses the SDK" in the README. They leave out `initialize` and the base URL setters. New API methods are added to them in minor releases, so they are meant to be mocked, not implemented in your own classes.
+
+### Changed
+
+- The default argument values of `ZeroBounceClient` and `ZeroBounceWarmup` methods are now declared on the interfaces. Kotlin source and Java callers are unaffected, the Java overloads of `addSendingAccount`, `listFromAddresses` and `checkDomainDmarc` included. A prebuilt Kotlin library compiled against 3.1.2 or earlier that leaves out an optional argument of these classes must be recompiled.
+
 ## [3.1.2] - 2026-11-18
 
 ### Changed
@@ -367,6 +377,7 @@ The details are under Changed and Fixed below.
 
 - First tagged release: validation, credits, usage, bulk file, and AI scoring.
 
+[Unreleased]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.2...HEAD
 [3.1.2]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/zerobounce/zero-bounce-android-sdk-setup/compare/v3.0.1...v3.1.0

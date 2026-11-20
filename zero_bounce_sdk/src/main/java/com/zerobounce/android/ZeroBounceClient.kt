@@ -10,8 +10,11 @@ import java.util.Date
 /**
  * One ZeroBounce API key. Construct a separate client per key. [ZeroBounceSDK] is a single shared
  * client and must not be reused across keys.
+ *
+ * Every request method comes from [ZeroBounceApi]. Code that should be testable without the
+ * network can depend on that interface and receive a mock in tests.
  */
-class ZeroBounceClient {
+class ZeroBounceClient : ZeroBounceApi {
     private val state = SdkState()
 
     @get:JvmSynthetic
@@ -26,14 +29,14 @@ class ZeroBounceClient {
         ZeroBounceSDK.initialize(apiKey, apiBaseUrl)
     }
 
-    fun validate(
+    override fun validate(
         email: String,
         ipAddress: String?,
         responseCallback: (response: ZBValidateResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.validate(email, ipAddress, responseCallback, errorCallback) }
 
-    fun validate(
+    override fun validate(
         email: String,
         ipAddress: String?,
         options: ZBValidateOptions?,
@@ -41,13 +44,13 @@ class ZeroBounceClient {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.validate(email, ipAddress, options, responseCallback, errorCallback) }
 
-    fun validateBatch(
+    override fun validateBatch(
         emails: List<ZBValidateBatchData>,
         responseCallback: (response: ZBValidateBatchResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.validateBatch(emails, responseCallback, errorCallback) }
 
-    fun validateBatch(
+    override fun validateBatch(
         emails: List<ZBValidateBatchData>,
         options: ZBValidateOptions?,
         responseCallback: (response: ZBValidateBatchResponse?) -> Unit,
@@ -60,23 +63,23 @@ class ZeroBounceClient {
             "If you are only determining the domain's email pattern, use 'findDomain()'.",
         level = DeprecationLevel.WARNING,
     )
-    fun guessFormat(
+    override fun guessFormat(
         domain: String,
-        firstName: String? = null,
-        middleName: String? = null,
-        lastName: String? = null,
+        firstName: String?,
+        middleName: String?,
+        lastName: String?,
         responseCallback: (response: ZBEmailFinderResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
         ZeroBounceSDK.guessFormat(domain, firstName, middleName, lastName, responseCallback, errorCallback)
     }
 
-    fun findEmail(
+    override fun findEmail(
         firstName: String,
-        domain: String? = null,
-        companyName: String? = null,
-        middleName: String? = null,
-        lastName: String? = null,
+        domain: String?,
+        companyName: String?,
+        middleName: String?,
+        lastName: String?,
         responseCallback: (response: ZBFindEmailResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -91,38 +94,38 @@ class ZeroBounceClient {
         )
     }
 
-    fun findDomain(
-        domain: String? = null,
-        companyName: String? = null,
+    override fun findDomain(
+        domain: String?,
+        companyName: String?,
         responseCallback: (response: ZBFindDomainResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.findDomain(domain, companyName, responseCallback, errorCallback) }
 
-    fun getApiUsage(
+    override fun getApiUsage(
         startDate: Date,
         endDate: Date,
         responseCallback: (response: ZBGetApiUsageResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getApiUsage(startDate, endDate, responseCallback, errorCallback) }
 
-    fun getCredits(
+    override fun getCredits(
         responseCallback: (response: ZBCreditsResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getCredits(responseCallback, errorCallback) }
 
     @Throws(ZBException::class)
-    fun sendFile(
+    override fun sendFile(
         context: Context,
         file: File,
         emailAddressColumnIndex: Int,
-        firstNameColumnIndex: Int? = null,
-        lastNameColumnIndex: Int? = null,
-        genderColumnIndex: Int? = null,
-        ipAddressColumnIndex: Int? = null,
-        returnUrl: String? = null,
-        hasHeaderRow: Boolean = false,
-        removeDuplicate: Boolean? = null,
-        allowPhase2: Boolean? = null,
+        firstNameColumnIndex: Int?,
+        lastNameColumnIndex: Int?,
+        genderColumnIndex: Int?,
+        ipAddressColumnIndex: Int?,
+        returnUrl: String?,
+        hasHeaderRow: Boolean,
+        removeDuplicate: Boolean?,
+        allowPhase2: Boolean?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -144,18 +147,18 @@ class ZeroBounceClient {
     }
 
     @Throws(ZBException::class)
-    fun sendFile(
+    override fun sendFile(
         inputStream: InputStream,
         fileName: String,
         emailAddressColumnIndex: Int,
-        firstNameColumnIndex: Int? = null,
-        lastNameColumnIndex: Int? = null,
-        genderColumnIndex: Int? = null,
-        ipAddressColumnIndex: Int? = null,
-        returnUrl: String? = null,
-        hasHeaderRow: Boolean = false,
-        removeDuplicate: Boolean? = null,
-        allowPhase2: Boolean? = null,
+        firstNameColumnIndex: Int?,
+        lastNameColumnIndex: Int?,
+        genderColumnIndex: Int?,
+        ipAddressColumnIndex: Int?,
+        returnUrl: String?,
+        hasHeaderRow: Boolean,
+        removeDuplicate: Boolean?,
+        allowPhase2: Boolean?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -177,13 +180,13 @@ class ZeroBounceClient {
     }
 
     @Throws(ZBException::class)
-    fun scoringSendFile(
+    override fun scoringSendFile(
         context: Context,
         file: File,
         emailAddressColumnIndex: Int,
-        returnUrl: String? = null,
-        hasHeaderRow: Boolean = false,
-        removeDuplicate: Boolean? = null,
+        returnUrl: String?,
+        hasHeaderRow: Boolean,
+        removeDuplicate: Boolean?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -200,13 +203,13 @@ class ZeroBounceClient {
     }
 
     @Throws(ZBException::class)
-    fun scoringSendFile(
+    override fun scoringSendFile(
         inputStream: InputStream,
         fileName: String,
         emailAddressColumnIndex: Int,
-        returnUrl: String? = null,
-        hasHeaderRow: Boolean = false,
-        removeDuplicate: Boolean? = null,
+        returnUrl: String?,
+        hasHeaderRow: Boolean,
+        removeDuplicate: Boolean?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -222,82 +225,82 @@ class ZeroBounceClient {
         )
     }
 
-    fun fileStatus(
+    override fun fileStatus(
         fileId: String,
         responseCallback: (response: ZBFileStatusResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.fileStatus(fileId, responseCallback, errorCallback) }
 
-    fun scoringFileStatus(
+    override fun scoringFileStatus(
         fileId: String,
         responseCallback: (response: ZBFileStatusResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoringFileStatus(fileId, responseCallback, errorCallback) }
 
-    fun getFile(
+    override fun getFile(
         context: Context,
         fileId: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-        downloadType: ZBDownloadType? = null,
-        activityData: Boolean? = null,
+        downloadType: ZBDownloadType?,
+        activityData: Boolean?,
     ) = use {
         ZeroBounceSDK.getFile(context, fileId, responseCallback, errorCallback, downloadType, activityData)
     }
 
-    fun scoringGetFile(
+    override fun scoringGetFile(
         context: Context,
         fileId: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
-        downloadType: ZBDownloadType? = null,
+        downloadType: ZBDownloadType?,
     ) = use {
         ZeroBounceSDK.scoringGetFile(context, fileId, responseCallback, errorCallback, downloadType)
     }
 
-    fun deleteFile(
+    override fun deleteFile(
         fileId: String,
         successCallback: (response: ZBDeleteFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.deleteFile(fileId, successCallback, errorCallback) }
 
-    fun scoringDeleteFile(
+    override fun scoringDeleteFile(
         fileId: String,
         successCallback: (response: ZBDeleteFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoringDeleteFile(fileId, successCallback, errorCallback) }
 
-    fun getActivityData(
+    override fun getActivityData(
         email: String,
         responseCallback: (response: ZBActivityDataResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getActivityData(email, responseCallback, errorCallback) }
 
-    fun scoreEmail(
+    override fun scoreEmail(
         email: String,
         responseCallback: (response: ZBScoreEmailResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoreEmail(email, responseCallback, errorCallback) }
 
-    fun scoreEmailPost(
+    override fun scoreEmailPost(
         email: String,
         responseCallback: (response: ZBScoreEmailResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoreEmailPost(email, responseCallback, errorCallback) }
 
-    fun sendEmailFinderFile(
+    override fun sendEmailFinderFile(
         file: File,
         domainColumn: Int,
-        options: ZBEmailFinderSendFileOptions? = null,
+        options: ZBEmailFinderSendFileOptions?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.sendEmailFinderFile(file, domainColumn, options, responseCallback, errorCallback) }
 
-    fun sendEmailFinderFileStream(
+    override fun sendEmailFinderFileStream(
         inputStream: InputStream,
         fileName: String,
         domainColumn: Int,
-        options: ZBEmailFinderSendFileOptions? = null,
+        options: ZBEmailFinderSendFileOptions?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -311,38 +314,38 @@ class ZeroBounceClient {
         )
     }
 
-    fun emailFinderFileStatus(
+    override fun emailFinderFileStatus(
         fileId: String,
         responseCallback: (response: ZBFileStatusResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.emailFinderFileStatus(fileId, responseCallback, errorCallback) }
 
-    fun emailFinderGetFile(
+    override fun emailFinderGetFile(
         fileId: String,
         downloadPath: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.emailFinderGetFile(fileId, downloadPath, responseCallback, errorCallback) }
 
-    fun emailFinderDeleteFile(
+    override fun emailFinderDeleteFile(
         fileId: String,
         responseCallback: (response: ZBDeleteFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.emailFinderDeleteFile(fileId, responseCallback, errorCallback) }
 
-    fun sendDomainSearchFile(
+    override fun sendDomainSearchFile(
         file: File,
         domainColumn: Int,
-        options: ZBDomainSearchSendFileOptions? = null,
+        options: ZBDomainSearchSendFileOptions?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.sendDomainSearchFile(file, domainColumn, options, responseCallback, errorCallback) }
 
-    fun sendDomainSearchFileStream(
+    override fun sendDomainSearchFileStream(
         inputStream: InputStream,
         fileName: String,
         domainColumn: Int,
-        options: ZBDomainSearchSendFileOptions? = null,
+        options: ZBDomainSearchSendFileOptions?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use {
@@ -356,33 +359,33 @@ class ZeroBounceClient {
         )
     }
 
-    fun domainSearchFileStatus(
+    override fun domainSearchFileStatus(
         fileId: String,
         responseCallback: (response: ZBFileStatusResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.domainSearchFileStatus(fileId, responseCallback, errorCallback) }
 
-    fun domainSearchGetFile(
+    override fun domainSearchGetFile(
         fileId: String,
         downloadPath: String,
         responseCallback: (response: ZBGetFileResponse) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.domainSearchGetFile(fileId, downloadPath, responseCallback, errorCallback) }
 
-    fun domainSearchDeleteFile(
+    override fun domainSearchDeleteFile(
         fileId: String,
         responseCallback: (response: ZBDeleteFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.domainSearchDeleteFile(fileId, responseCallback, errorCallback) }
 
-    fun sendListEvaluatorFile(
+    override fun sendListEvaluatorFile(
         file: File,
         emailAddressColumn: Int,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.sendListEvaluatorFile(file, emailAddressColumn, responseCallback, errorCallback) }
 
-    fun sendListEvaluatorFileStream(
+    override fun sendListEvaluatorFileStream(
         inputStream: InputStream,
         fileName: String,
         emailAddressColumn: Int,
@@ -398,19 +401,19 @@ class ZeroBounceClient {
         )
     }
 
-    fun getListEvaluatorResult(
+    override fun getListEvaluatorResult(
         fileId: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getListEvaluatorResult(fileId, responseCallback, errorCallback) }
 
-    fun sendEvaluatedFile(
+    override fun sendEvaluatedFile(
         fileId: String,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.sendEvaluatedFile(fileId, responseCallback, errorCallback) }
 
-    fun addFilter(
+    override fun addFilter(
         rule: String,
         target: String,
         value: String,
@@ -418,13 +421,13 @@ class ZeroBounceClient {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.addFilter(rule, target, value, responseCallback, errorCallback) }
 
-    fun listFilters(
+    override fun listFilters(
         usePost: Boolean,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.listFilters(usePost, responseCallback, errorCallback) }
 
-    fun deleteFilter(
+    override fun deleteFilter(
         rule: String,
         target: String,
         value: String,
@@ -432,116 +435,116 @@ class ZeroBounceClient {
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.deleteFilter(rule, target, value, responseCallback, errorCallback) }
 
-    fun listS3Files(
-        bucket: String? = null,
-        search: String? = null,
+    override fun listS3Files(
+        bucket: String?,
+        search: String?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.listS3Files(bucket, search, responseCallback, errorCallback) }
 
-    fun validateS3File(
+    override fun validateS3File(
         options: ZBValidateS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.validateS3File(options, responseCallback, errorCallback) }
 
-    fun scoreS3File(
+    override fun scoreS3File(
         options: ZBScoreS3FileOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoreS3File(options, responseCallback, errorCallback) }
 
-    fun exportS3File(
+    override fun exportS3File(
         fileId: String,
         exportBucket: String?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.exportS3File(fileId, exportBucket, responseCallback, errorCallback) }
 
-    fun emailFinderS3File(
+    override fun emailFinderS3File(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.emailFinderS3File(options, responseCallback, errorCallback) }
 
-    fun domainSearchS3File(
+    override fun domainSearchS3File(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.domainSearchS3File(options, responseCallback, errorCallback) }
 
-    fun validateSFTPFile(
+    override fun validateSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.validateSFTPFile(options, responseCallback, errorCallback) }
 
-    fun scoreSFTPFile(
+    override fun scoreSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.scoreSFTPFile(options, responseCallback, errorCallback) }
 
-    fun emailFinderSFTPFile(
+    override fun emailFinderSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.emailFinderSFTPFile(options, responseCallback, errorCallback) }
 
-    fun domainSearchSFTPFile(
+    override fun domainSearchSFTPFile(
         options: ZBBulkFileJobOptions,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.domainSearchSFTPFile(options, responseCallback, errorCallback) }
 
-    fun exportSFTPFile(
+    override fun exportSFTPFile(
         fileId: String,
         exportPath: String?,
         responseCallback: (response: ZBSendFileResponse?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.exportSFTPFile(fileId, exportPath, responseCallback, errorCallback) }
 
-    fun getInboxPlacementProviders(
+    override fun getInboxPlacementProviders(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getInboxPlacementProviders(responseCallback, errorCallback) }
 
-    fun getInboxPlacementTestTypes(
+    override fun getInboxPlacementTestTypes(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getInboxPlacementTestTypes(responseCallback, errorCallback) }
 
-    fun createInboxPlacementTest(
+    override fun createInboxPlacementTest(
         name: String,
-        options: ZBCreateInboxPlacementTestOptions? = null,
+        options: ZBCreateInboxPlacementTestOptions?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.createInboxPlacementTest(name, options, responseCallback, errorCallback) }
 
-    fun getInboxPlacementTest(
+    override fun getInboxPlacementTest(
         testId: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getInboxPlacementTest(testId, responseCallback, errorCallback) }
 
-    fun listInboxPlacementTests(
-        options: ZBListInboxPlacementTestsOptions? = null,
+    override fun listInboxPlacementTests(
+        options: ZBListInboxPlacementTestsOptions?,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.listInboxPlacementTests(options, responseCallback, errorCallback) }
 
-    fun deleteInboxPlacementTest(
+    override fun deleteInboxPlacementTest(
         testId: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.deleteInboxPlacementTest(testId, responseCallback, errorCallback) }
 
-    fun getInboxPlacementWebhook(
+    override fun getInboxPlacementWebhook(
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
     ) = use { ZeroBounceSDK.getInboxPlacementWebhook(responseCallback, errorCallback) }
 
-    fun setInboxPlacementWebhook(
+    override fun setInboxPlacementWebhook(
         webhookUrl: String,
         responseCallback: (response: JsonElement?) -> Unit,
         errorCallback: (errorResponse: ErrorResponse?) -> Unit,
